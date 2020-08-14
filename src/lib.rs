@@ -20,6 +20,11 @@ impl Renderer {
 
         Self { window_size, surface, adapter, device, queue, swap_chain }
     }
+
+    pub fn resize(&mut self, new_size: &dpi::PhysicalSize<u32>) {
+        self.window_size = *new_size;
+        self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
+    }
 }
 
 fn get_adapter(surface: &wgpu::Surface) -> wgpu::Adapter {
