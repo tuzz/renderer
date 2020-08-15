@@ -25,6 +25,42 @@ impl Renderer {
         self.window_size = *new_size;
         self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
     }
+
+    pub fn render(&mut self, pipeline: &crate::Pipeline, program: &crate::Program, clear_color: Option<crate::ClearColor>) {
+        let frame = self.swap_chain.get_next_texture().unwrap();
+
+        crate::RenderPass {
+            device: &self.device,
+            target: &frame.view,
+            pipeline,
+            program,
+            clear_color,
+        }.render();
+    }
+
+    pub fn attribute(&self, location: u32, size: u32) -> crate::Attribute {
+        crate::Attribute::new(&self.device, location, size)
+    }
+
+    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: Vec<crate::Attribute>) -> crate::Program {
+        crate::Program::new(&self.device, vert, frag, attributes)
+    }
+
+    pub fn pipeline(&self, program: &crate::Program, blend_mode: &crate::BlendMode) -> crate::Pipeline {
+        crate::Pipeline::new(&self.device, program, blend_mode)
+    }
+
+    pub fn additive_blend(&self) -> crate::BlendMode {
+        crate::BlendMode::additive()
+    }
+
+    pub fn pre_multiplied_blend(&self) -> crate::BlendMode {
+        crate::BlendMode::pre_multiplied_alpha()
+    }
+
+    pub fn clear_color(&self, red: f32, green: f32, blue: f32, alpha: f32) -> crate::ClearColor {
+        crate::ClearColor::new(red, green, blue, alpha)
+    }
 }
 
 fn get_adapter(surface: &wgpu::Surface) -> wgpu::Adapter {
