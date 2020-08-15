@@ -13,7 +13,7 @@ impl Attribute {
 }
 
 fn create_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-    let descriptor = wgpu::BufferDescriptor { label: None, size: 0, usage: wgpu::BufferUsage::VERTEX };
+    let descriptor = wgpu::BufferDescriptor { label: None, size: 1, usage: wgpu::BufferUsage::VERTEX };
 
     device.create_buffer(&descriptor)
 }
