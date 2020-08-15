@@ -43,14 +43,18 @@ fn programmable_stage(module: &wgpu::ShaderModule) -> wgpu::ProgrammableStageDes
     wgpu::ProgrammableStageDescriptor { module, entry_point: "main" }
 }
 
-fn attribute_descriptors(attributes: &[crate::Attribute]) -> Vec<Vec<wgpu::VertexAttributeDescriptor>> {
-    attributes.iter().map(|a| vec![a.descriptor.clone()]).collect::<Vec<_>>()
+type DescriptorsAndSize = (Vec<wgpu::VertexAttributeDescriptor>, u32);
+
+fn attribute_descriptors(attributes: &[crate::Attribute]) -> Vec<DescriptorsAndSize> {
+    attributes.iter().map(|a| (vec![a.descriptor.clone()], a.size)).collect::<Vec<_>>()
 }
 
-fn vertex_buffers(descriptors: &[Vec<wgpu::VertexAttributeDescriptor>]) -> Vec<wgpu::VertexBufferDescriptor> {
-    descriptors.iter().map(|descriptors| {
+fn vertex_buffers(slice: &[DescriptorsAndSize]) -> Vec<wgpu::VertexBufferDescriptor> {
+    slice.iter().map(|(descriptors, size)| {
+        let stride = std::mem::size_of::<f32>() * *size as usize;
+
         wgpu::VertexBufferDescriptor {
-          stride: 0,
+          stride: stride as wgpu::BufferAddress,
           step_mode: wgpu::InputStepMode::Vertex,
           attributes: descriptors,
       }
