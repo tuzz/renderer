@@ -33,6 +33,15 @@ impl Renderer {
         self.queue.submit(&[commands]);
     }
 
+    pub fn set_attribute(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
+        let attribute = &pipeline.program.attributes[index];
+        let option = attribute.buffer.set_data(&self.device, data);
+
+        if let Some(commands) = option {
+            self.queue.submit(&[commands]);
+        }
+    }
+
     pub fn attribute(&self, location: u32, size: u32) -> crate::Attribute {
         crate::Attribute::new(&self.device, location, size)
     }
