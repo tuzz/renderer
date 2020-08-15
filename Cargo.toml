@@ -16,3 +16,6 @@ optional = true
 
 [features]
 shader_compilation = ["shaderc"]
+
+[dev-dependencies]
+png = "0.15.3"

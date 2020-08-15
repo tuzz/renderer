@@ -13,6 +13,9 @@ fn main() {
     let vert = include_bytes!("../src/shaders/hello.vert.spirv");
     let frag = include_bytes!("../src/shaders/hello.frag.spirv");
 
+    let letter_f = include_bytes!("../src/images/letter_f.png");
+    let (image, width, height) = load_image(letter_f);
+
     let a_position = renderer.attribute(A_POSITION, 2);
     let a_color = renderer.attribute(A_COLOR, 3);
     let program = renderer.program(vert, frag, vec![a_position, a_color]);
@@ -47,4 +50,29 @@ fn main() {
             _ => {},
         }
     });
+}
+
+fn load_image(bytes: &[u8]) -> (Vec<u8>, u32, u32) {
+    let mut decoder = png::Decoder::new(bytes);
+
+    // Don't strip the alpha channel from the png.
+    decoder.set_transformations(png::Transformations::IDENTITY);
+
+    let (info, mut reader) = decoder.read_info().unwrap();
+    let mut buffer = vec![0; info.buffer_size()];
+
+    reader.next_frame(&mut buffer).unwrap();
+    premultiply_alpha(&mut buffer);
+
+    (buffer, info.width, info.height)
+}
+
+fn premultiply_alpha(buffer: &mut Vec<u8>) {
+    for chunk in buffer.chunks_mut(4) {
+        let alpha = (chunk[3] as f32) / 255.;
+
+        chunk[0] = (chunk[0] as f32 * alpha).round() as u8;
+        chunk[1] = (chunk[1] as f32 * alpha).round() as u8;
+        chunk[2] = (chunk[2] as f32 * alpha).round() as u8;
+    }
 }
