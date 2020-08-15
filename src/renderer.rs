@@ -28,13 +28,9 @@ impl Renderer {
 
     pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>) {
         let frame = self.swap_chain.get_next_texture().unwrap();
+        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color);
 
-        crate::RenderPass {
-            device: &self.device,
-            target: &frame.view,
-            pipeline,
-            clear_color,
-        }.render();
+        self.queue.submit(&[commands]);
     }
 
     pub fn attribute(&self, location: u32, size: u32) -> crate::Attribute {
