@@ -1,8 +1,10 @@
 mod attribute;
+mod blend_mode;
 mod program;
 mod renderer;
 
 pub use attribute::*;
+pub use blend_mode::*;
 pub use program::*;
 pub use renderer::*;
 
