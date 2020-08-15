@@ -1,5 +1,6 @@
+#[derive(Clone, Copy)]
 pub struct ClearColor {
-    inner: wgpu::Color,
+    pub inner: wgpu::Color,
 }
 
 impl ClearColor {
