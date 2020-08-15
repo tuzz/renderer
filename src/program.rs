@@ -1,14 +1,13 @@
-use crate::Attribute;
 use std::io;
 
 pub struct Program {
-    vertex_shader: wgpu::ShaderModule,
-    fragment_shader: wgpu::ShaderModule,
-    attributes: Vec<Attribute>,
+    pub vertex_shader: wgpu::ShaderModule,
+    pub fragment_shader: wgpu::ShaderModule,
+    pub attributes: Vec<crate::Attribute>,
 }
 
 impl Program {
-    pub fn new(device: &wgpu::Device, vert: &[u8], frag: &[u8], attributes: Vec<Attribute>) -> Self {
+    pub fn new(device: &wgpu::Device, vert: &[u8], frag: &[u8], attributes: Vec<crate::Attribute>) -> Self {
         let vertex_shader = create_shader_module(device, vert);
         let fragment_shader = create_shader_module(device, frag);
 

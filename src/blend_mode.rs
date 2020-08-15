@@ -1,5 +1,5 @@
 pub struct BlendMode {
-    descriptor: wgpu::ColorStateDescriptor,
+    pub descriptor: wgpu::ColorStateDescriptor,
 }
 
 impl BlendMode {

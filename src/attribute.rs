@@ -1,6 +1,6 @@
 pub struct Attribute {
-    buffer: wgpu::Buffer,
-    descriptor: wgpu::VertexAttributeDescriptor,
+    pub buffer: wgpu::Buffer,
+    pub descriptor: wgpu::VertexAttributeDescriptor,
 }
 
 impl Attribute {

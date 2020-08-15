@@ -2,12 +2,12 @@ use futures::executor;
 use winit::{dpi, window};
 
 pub struct Renderer {
-    window_size: dpi::PhysicalSize<u32>,
-    surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    swap_chain: wgpu::SwapChain,
+    pub window_size: dpi::PhysicalSize<u32>,
+    pub surface: wgpu::Surface,
+    pub adapter: wgpu::Adapter,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub swap_chain: wgpu::SwapChain,
 }
 
 impl Renderer {
