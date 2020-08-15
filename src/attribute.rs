@@ -1,21 +1,21 @@
+use std::mem;
+
 pub struct Attribute {
-    pub buffer: wgpu::Buffer,
+    pub buffer: crate::Buffer,
     pub descriptor: wgpu::VertexAttributeDescriptor,
+    pub size: u32,
 }
+
+const INITAL_BUFFER_SIZE: usize = mem::size_of::<f32>() * 1024;
 
 impl Attribute {
     pub fn new(device: &wgpu::Device, location: u32, size: u32) -> Self {
-        let buffer = create_vertex_buffer(device);
+        let usage = wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST;
+        let buffer = crate::Buffer::new(device, usage);
         let descriptor = attribute_descriptor(location, size);
 
-        Self { buffer, descriptor }
+        Self { buffer, descriptor, size }
     }
-}
-
-fn create_vertex_buffer(device: &wgpu::Device) -> wgpu::Buffer {
-    let descriptor = wgpu::BufferDescriptor { label: None, size: 1, usage: wgpu::BufferUsage::VERTEX };
-
-    device.create_buffer(&descriptor)
 }
 
 fn attribute_descriptor(shader_location: u32, size: u32) -> wgpu::VertexAttributeDescriptor {

@@ -1,4 +1,4 @@
-use std::{cell, mem};
+use std::{cell, mem, ops};
 
 pub struct Buffer {
     pub inner: cell::RefCell<Inner>,
@@ -51,4 +51,12 @@ fn create_buffer_with_data(device: &wgpu::Device, data: &[f32]) -> wgpu::Buffer 
 
 fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+}
+
+impl ops::Deref for Buffer {
+    type Target = wgpu::Buffer;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &self.inner.try_borrow_unguarded().unwrap().buffer }
+    }
 }
