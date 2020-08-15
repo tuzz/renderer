@@ -1,5 +1,6 @@
 mod attribute;
 mod blend_mode;
+mod buffer;
 mod clear_color;
 mod pipeline;
 mod program;
@@ -8,6 +9,7 @@ mod render_pass;
 
 pub use attribute::*;
 pub use blend_mode::*;
+pub use buffer::*;
 pub use clear_color::*;
 pub use pipeline::*;
 pub use program::*;
