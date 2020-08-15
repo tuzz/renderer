@@ -1,8 +1,9 @@
-use crate::*;
 use shaderc::ShaderKind;
 use std::fs;
 
-impl Renderer {
+pub struct Compiler;
+
+impl Compiler {
     pub fn compile_shaders(directory: &str) {
         for entry in fs::read_dir(directory).unwrap() {
             let path = entry.unwrap().path();
