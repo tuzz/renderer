@@ -50,8 +50,8 @@ impl Renderer {
         crate::Program::new(&self.device, vert, frag, attributes)
     }
 
-    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode) -> crate::Pipeline {
-        crate::Pipeline::new(&self.device, program, blend_mode)
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> crate::Pipeline {
+        crate::Pipeline::new(&self.device, program, blend_mode, primitive)
     }
 
     pub fn additive_blend(&self) -> crate::BlendMode {
@@ -60,6 +60,14 @@ impl Renderer {
 
     pub fn pre_multiplied_blend(&self) -> crate::BlendMode {
         crate::BlendMode::pre_multiplied_alpha()
+    }
+
+    pub fn triangle_primitive(&self) -> crate::Primitive {
+        crate::Primitive::Triangle
+    }
+
+    pub fn triangle_strip_primitive(&self) -> crate::Primitive {
+        crate::Primitive::TriangleStrip
     }
 
     pub fn clear_color(&self, red: f32, green: f32, blue: f32, alpha: f32) -> crate::ClearColor {

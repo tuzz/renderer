@@ -2,17 +2,18 @@ pub struct Pipeline {
     pub inner: wgpu::RenderPipeline,
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
+    pub primitive: crate::Primitive,
 }
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode) -> Self {
-        let inner = create_render_pipeline(device, &program, &blend_mode);
+    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> Self {
+        let inner = create_render_pipeline(device, &program, &blend_mode, &primitive);
 
-        Self { inner, program, blend_mode }
+        Self { inner, program, blend_mode, primitive }
     }
 }
 
-fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode) -> wgpu::RenderPipeline {
+fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive) -> wgpu::RenderPipeline {
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
 
@@ -21,7 +22,7 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
         vertex_stage: programmable_stage(&program.vertex_shader),
         fragment_stage: Some(programmable_stage(&program.fragment_shader)),
         rasterization_state: None,
-        primitive_topology: wgpu::PrimitiveTopology::TriangleStrip, // TODO
+        primitive_topology: primitive.topology(),
         color_states: &[blend_mode.descriptor.clone()],
         depth_stencil_state: None,
         vertex_state: vertex_state(&vertex_buffers),
