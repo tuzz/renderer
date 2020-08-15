@@ -1,3 +1,4 @@
+mod attribute;
 #[cfg(feature="shader_compilation")] mod compile;
 
 use futures::executor;
