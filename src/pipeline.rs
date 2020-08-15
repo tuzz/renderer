@@ -20,7 +20,7 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
         layout: &create_layout(device),
         vertex_stage: programmable_stage(&program.vertex_shader),
         fragment_stage: Some(programmable_stage(&program.fragment_shader)),
-        rasterization_state: Some(rasterization_state()),
+        rasterization_state: None,
         primitive_topology: wgpu::PrimitiveTopology::TriangleStrip, // TODO
         color_states: &[blend_mode.descriptor.clone()],
         depth_stencil_state: None,
@@ -41,17 +41,6 @@ fn create_layout(device: &wgpu::Device) -> wgpu::PipelineLayout {
 
 fn programmable_stage(module: &wgpu::ShaderModule) -> wgpu::ProgrammableStageDescriptor {
     wgpu::ProgrammableStageDescriptor { module, entry_point: "main" }
-}
-
-// TODO: is this needed? can be set to None above
-fn rasterization_state() -> wgpu::RasterizationStateDescriptor {
-    wgpu::RasterizationStateDescriptor {
-        front_face: wgpu::FrontFace::Ccw,
-        cull_mode: wgpu::CullMode::None,
-        depth_bias: 0,
-        depth_bias_slope_scale: 0.0,
-        depth_bias_clamp: 0.0,
-    }
 }
 
 fn attribute_descriptors(attributes: &[crate::Attribute]) -> Vec<Vec<wgpu::VertexAttributeDescriptor>> {
