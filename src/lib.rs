@@ -1,3 +1,5 @@
+#[cfg(feature="shader_compilation")] mod compile;
+
 use futures::executor;
 use winit::{dpi, window};
 

@@ -8,3 +8,10 @@ edition = "2018"
 futures = "0.3.5"
 wgpu = "0.5.2"
 winit = "0.21.0"
+
+[dependencies.shaderc]
+version = "0.6.2"
+optional = true
+
+[features]
+shader_compilation = ["shaderc"]

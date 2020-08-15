@@ -5,6 +5,8 @@ fn main() {
     let window = window::WindowBuilder::new().build(&event_loop).unwrap();
     let mut renderer = renderer::Renderer::new(&window);
 
+    renderer::Renderer::compile_shaders("src/shaders");
+
     event_loop.run(move |event, _, control_flow| {
         match event {
             event::Event::RedrawRequested(_) => {
