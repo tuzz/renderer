@@ -1,7 +1,10 @@
 use winit::{event, event_loop, window};
 
+const A_POSITION: usize = 0;
+const A_COLOR: usize = 1;
+
 fn main() {
-    //renderer::Compiler::compile_shaders("src/shaders");
+    renderer::Compiler::compile_shaders("src/shaders");
 
     let event_loop = event_loop::EventLoop::new();
     let window = window::WindowBuilder::new().build(&event_loop).unwrap();
@@ -10,8 +13,9 @@ fn main() {
     let vert = include_bytes!("../src/shaders/hello.vert.spirv");
     let frag = include_bytes!("../src/shaders/hello.frag.spirv");
 
-    let a_position = renderer.attribute(0, 2);
-    let program = renderer.program(vert, frag, vec![a_position]);
+    let a_position = renderer.attribute(A_POSITION, 2);
+    let a_color = renderer.attribute(A_COLOR, 3);
+    let program = renderer.program(vert, frag, vec![a_position, a_color]);
     let blend_mode = renderer.pre_multiplied_blend();
     let pipeline = renderer.pipeline(program, blend_mode);
     let clear_color = renderer.clear_color(0., 0., 0., 0.);
@@ -19,7 +23,9 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         match event {
             event::Event::RedrawRequested(_) => {
-                renderer.set_attribute(&pipeline, 0, &[0., 1., -1., -1., 1., -1.]);
+                renderer.set_attribute(&pipeline, A_POSITION, &[0., 1., -1., -1., 1., -1.]);
+                renderer.set_attribute(&pipeline, A_COLOR, &[1., 0., 0., 0., 1., 0., 0., 0., 1.]);
+
                 renderer.render(&pipeline, Some(clear_color), (1, 3));
             },
             event::Event::MainEventsCleared => {

@@ -42,7 +42,7 @@ impl Renderer {
         }
     }
 
-    pub fn attribute(&self, location: u32, size: u32) -> crate::Attribute {
+    pub fn attribute(&self, location: usize, size: u32) -> crate::Attribute {
         crate::Attribute::new(&self.device, location, size)
     }
 

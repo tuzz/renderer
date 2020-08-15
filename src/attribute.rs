@@ -9,10 +9,10 @@ pub struct Attribute {
 const INITAL_BUFFER_SIZE: usize = mem::size_of::<f32>() * 1024;
 
 impl Attribute {
-    pub fn new(device: &wgpu::Device, location: u32, size: u32) -> Self {
+    pub fn new(device: &wgpu::Device, location: usize, size: u32) -> Self {
         let usage = wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST;
         let buffer = crate::Buffer::new(device, usage);
-        let descriptor = attribute_descriptor(location, size);
+        let descriptor = attribute_descriptor(location as u32, size);
 
         Self { buffer, descriptor, size }
     }
