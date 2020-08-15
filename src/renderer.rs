@@ -26,9 +26,9 @@ impl Renderer {
         self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
     }
 
-    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>) {
+    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
         let frame = self.swap_chain.get_next_texture().unwrap();
-        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color);
+        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, count);
 
         self.queue.submit(&[commands]);
     }

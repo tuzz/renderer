@@ -1,10 +1,11 @@
 pub struct RenderPass;
 
 impl RenderPass {
-    pub fn render(device: &wgpu::Device, target: &wgpu::TextureView, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>) -> wgpu::CommandBuffer {
+    pub fn render(device: &wgpu::Device, target: &wgpu::TextureView, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) -> wgpu::CommandBuffer {
         let color_attachments = color_attachments(target, clear_color);
         let descriptor = render_pass_descriptor(&color_attachments);
         let attributes = &pipeline.program.attributes;
+        let (instance_count, vertices_per_instance) = count;
 
         let mut encoder = create_command_encoder(device);
         let mut render_pass = encoder.begin_render_pass(&descriptor);
@@ -14,6 +15,8 @@ impl RenderPass {
         for (slot, attribute) in attributes.iter().enumerate() {
             render_pass.set_vertex_buffer(slot as u32, &attribute.buffer, 0, 0);
         }
+
+        render_pass.draw(0..vertices_per_instance, 0..instance_count);
 
         drop(render_pass);
         encoder.finish()

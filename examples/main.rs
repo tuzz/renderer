@@ -19,7 +19,7 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         match event {
             event::Event::RedrawRequested(_) => {
-                renderer.render(&pipeline, Some(clear_color));
+                renderer.render(&pipeline, Some(clear_color), (1, 3));
             },
             event::Event::MainEventsCleared => {
                 window.request_redraw();
