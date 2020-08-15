@@ -2,7 +2,6 @@ pub struct RenderPass<'a> {
     pub device: &'a wgpu::Device,
     pub target: &'a wgpu::TextureView,
     pub pipeline: &'a crate::Pipeline,
-    pub program: &'a crate::Program,
     pub clear_color: Option<crate::ClearColor>,
 }
 
@@ -10,13 +9,14 @@ impl<'a> RenderPass<'a> {
     pub fn render(&self) -> wgpu::CommandBuffer {
         let color_attachments = color_attachments(self.target, self.clear_color);
         let descriptor = render_pass_descriptor(&color_attachments);
+        let attributes = &self.pipeline.program.attributes;
 
         let mut encoder = create_command_encoder(self.device);
         let mut render_pass = encoder.begin_render_pass(&descriptor);
 
         render_pass.set_pipeline(&self.pipeline.inner);
 
-        for (slot, attribute) in self.program.attributes.iter().enumerate() {
+        for (slot, attribute) in attributes.iter().enumerate() {
             render_pass.set_vertex_buffer(slot as u32, &attribute.buffer, 0, 0);
         }
 

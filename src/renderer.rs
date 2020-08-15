@@ -26,14 +26,13 @@ impl Renderer {
         self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
     }
 
-    pub fn render(&mut self, pipeline: &crate::Pipeline, program: &crate::Program, clear_color: Option<crate::ClearColor>) {
+    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>) {
         let frame = self.swap_chain.get_next_texture().unwrap();
 
         crate::RenderPass {
             device: &self.device,
             target: &frame.view,
             pipeline,
-            program,
             clear_color,
         }.render();
     }
@@ -46,7 +45,7 @@ impl Renderer {
         crate::Program::new(&self.device, vert, frag, attributes)
     }
 
-    pub fn pipeline(&self, program: &crate::Program, blend_mode: &crate::BlendMode) -> crate::Pipeline {
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode) -> crate::Pipeline {
         crate::Pipeline::new(&self.device, program, blend_mode)
     }
 

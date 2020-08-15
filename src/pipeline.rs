@@ -1,12 +1,14 @@
 pub struct Pipeline {
     pub inner: wgpu::RenderPipeline,
+    pub program: crate::Program,
+    pub blend_mode: crate::BlendMode,
 }
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode) -> Self {
-        let inner = create_render_pipeline(device, program, blend_mode);
+    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode) -> Self {
+        let inner = create_render_pipeline(device, &program, &blend_mode);
 
-        Self { inner }
+        Self { inner, program, blend_mode }
     }
 }
 

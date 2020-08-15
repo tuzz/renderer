@@ -13,13 +13,13 @@ fn main() {
     let a_position = renderer.attribute(0, 2);
     let program = renderer.program(vert, frag, vec![a_position]);
     let blend_mode = renderer.pre_multiplied_blend();
-    let pipeline = renderer.pipeline(&program, &blend_mode);
+    let pipeline = renderer.pipeline(program, blend_mode);
     let clear_color = renderer.clear_color(0., 0., 0., 0.);
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             event::Event::RedrawRequested(_) => {
-                renderer.render(&pipeline, &program, Some(clear_color));
+                renderer.render(&pipeline, Some(clear_color));
             },
             event::Event::MainEventsCleared => {
                 window.request_redraw();
