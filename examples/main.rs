@@ -3,8 +3,8 @@ use winit::{event, event_loop, window};
 const A_POSITION: usize = 0;
 const A_TEX_COORD: usize = 1;
 
-const U_OFFSET: usize = 0;
-const U_TEXTURE: usize = 1;
+const I_OFFSET: usize = 0;
+const T_TEXTURE: usize = 1;
 
 fn main() {
     renderer::Compiler::compile_shaders("src/shaders");
@@ -21,16 +21,18 @@ fn main() {
 
     let a_position = renderer.attribute(A_POSITION, 2);
     let a_tex_coord = renderer.attribute(A_TEX_COORD, 2);
-    let u_offset = renderer.uniform(2);
-    let u_texture = renderer.texture(width, height, renderer.linear_filtering());
+    let i_offset = renderer.instance(2);
+    let t_texture = renderer.texture(width, height, renderer.linear_filtering());
 
     let program = renderer.program(vert, frag, vec![
         a_position,                                         // attribute 0
         a_tex_coord,                                        // attribute 1
     ], vec![
-        (u_offset, renderer.visible_to_vertex_shader()),    // uniform 0
+        i_offset,                                           // set 0
     ], vec![
-        (u_texture, renderer.visible_to_fragment_shader()), // uniform 1
+        // no uniforms
+    ], vec![
+        (t_texture, renderer.visible_to_fragment_shader()), // set 1
     ]);
 
     let blend_mode = renderer.pre_multiplied_blend();
@@ -40,22 +42,25 @@ fn main() {
 
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
-    renderer.set_texture(&pipeline, U_TEXTURE, &image);
+    renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
-    let mut x = (0.3, 0.015);
-    let mut y = (-0.3, 0.01);
+    let mut x1 = (0.3, 0.015);
+    let mut y1 = (-0.3, 0.01);
+
+    let mut x2 = (-0.5, 0.005);
+    let mut y2 = (-0.1, 0.02);
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             event::Event::RedrawRequested(_) => {
-                x.0 += x.1;
-                y.0 += y.1;
+                x1.0 += x1.1; if x1.0 > 0.9 || x1.0 < -0.9 { x1.1 *= -1.; }
+                y1.0 += y1.1; if y1.0 > 0.9 || y1.0 < -0.9 { y1.1 *= -1.; }
 
-                if x.0 > 0.9 || x.0 < -0.9 { x.1 *= -1.; }
-                if y.0 > 0.9 || y.0 < -0.9 { y.1 *= -1.; }
+                x2.0 += x2.1; if x2.0 > 0.9 || x2.0 < -0.9 { x2.1 *= -1.; }
+                y2.0 += y2.1; if y2.0 > 0.9 || y2.0 < -0.9 { y2.1 *= -1.; }
 
-                renderer.set_uniform(&pipeline, U_OFFSET, &[x.0, y.0]);
-                renderer.render(&pipeline, Some(clear_color), (1, 4));
+                renderer.set_instanced(&pipeline, I_OFFSET, &[x1.0, y1.0, x2.0, y2.0]);
+                renderer.render(&pipeline, Some(clear_color), (2, 4));
             },
             event::Event::MainEventsCleared => {
                 window.request_redraw();

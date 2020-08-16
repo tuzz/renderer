@@ -42,8 +42,19 @@ impl Renderer {
         }
     }
 
+    pub fn set_instanced(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
+        let instanced = &pipeline.program.instances[index];
+        let option = instanced.buffer.set_data(&self.device, data);
+
+        if let Some(commands) = option {
+            self.queue.submit(&[commands]);
+        }
+    }
+
     pub fn set_uniform(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
-        let (uniform, _) = &pipeline.program.uniforms[index];
+        let relative_index = index - pipeline.program.instances.len();
+
+        let (uniform, _) = &pipeline.program.uniforms[relative_index];
         let option = uniform.buffer.set_data(&self.device, data);
 
         if let Some(commands) = option {
@@ -52,7 +63,7 @@ impl Renderer {
     }
 
     pub fn set_texture(&self, pipeline: &crate::Pipeline, index: usize, data: &[u8]) {
-        let relative_index = index - pipeline.program.uniforms.len();
+        let relative_index = index - pipeline.program.instances.len() - pipeline.program.uniforms.len();
 
         let (texture, _) = &pipeline.program.textures[relative_index];
         let commands = texture.set_data(&self.device, data);
@@ -64,6 +75,10 @@ impl Renderer {
         crate::Attribute::new(&self.device, location, size)
     }
 
+    pub fn instance(&self, size: u32) -> crate::Instanced {
+        crate::Instanced::new(&self.device, size)
+    }
+
     pub fn uniform(&self, size: u32) -> crate::Uniform {
         crate::Uniform::new(&self.device, size)
     }
@@ -72,8 +87,8 @@ impl Renderer {
         crate::Texture::new(&self.device, (width, height), filter_mode)
     }
 
-    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {
-        crate::Program::new(&self.device, vert, frag, attributes, uniforms, textures)
+    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, instances: crate::Instances, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {
+        crate::Program::new(&self.device, vert, frag, attributes, instances, uniforms, textures)
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> crate::Pipeline {

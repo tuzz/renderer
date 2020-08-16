@@ -19,18 +19,19 @@ fn create_bind_groups(device: &wgpu::Device, program: &crate::Program) -> (Vec<w
     let mut bind_groups = vec![];
     let mut layouts = vec![];
 
+    for instanced in &program.instances {
+        let (bind_group, layout) = instanced.create_bind_group(device);
+        bind_groups.push(bind_group); layouts.push(layout);
+    }
+
     for (uniform, visibility) in &program.uniforms {
         let (bind_group, layout) = uniform.create_bind_group(device, visibility);
-
-        bind_groups.push(bind_group);
-        layouts.push(layout);
+        bind_groups.push(bind_group); layouts.push(layout);
     }
 
     for (texture, visibility) in &program.textures {
         let (bind_group, layout) = texture.create_bind_group(device, visibility);
-
-        bind_groups.push(bind_group);
-        layouts.push(layout);
+        bind_groups.push(bind_group); layouts.push(layout);
     }
 
     (bind_groups, layouts)
