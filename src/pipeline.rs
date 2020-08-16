@@ -4,14 +4,15 @@ pub struct Pipeline {
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
     pub primitive: crate::Primitive,
+    pub target: crate::Target,
 }
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> Self {
+    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> Self {
         let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let inner = create_render_pipeline(device, &program, &blend_mode, &primitive, &layouts);
+        let inner = create_render_pipeline(device, &program, &blend_mode, &primitive, &layouts, &target);
 
-        Self { inner, bind_groups, program, blend_mode, primitive }
+        Self { inner, bind_groups, program, blend_mode, primitive, target }
     }
 }
 
@@ -37,7 +38,7 @@ fn create_bind_groups(device: &wgpu::Device, program: &crate::Program) -> (Vec<w
     (bind_groups, layouts)
 }
 
-fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout]) -> wgpu::RenderPipeline {
+fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], target: &crate::Target) -> wgpu::RenderPipeline {
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
 
@@ -47,7 +48,7 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
         fragment_stage: Some(programmable_stage(&program.fragment_shader)),
         rasterization_state: None,
         primitive_topology: primitive.topology(),
-        color_states: &[blend_mode.descriptor(crate::Format::BgraU8)], // TODO
+        color_states: &[blend_mode.descriptor(target.format())],
         depth_stencil_state: None,
         vertex_state: vertex_state(&vertex_buffers),
         sample_count: 1,

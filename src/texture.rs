@@ -9,8 +9,8 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format) -> Self {
-        let inner = create_texture(device, size, &format);
+    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, renderable: bool) -> Self {
+        let inner = create_texture(device, size, &format, renderable);
         let view = inner.create_default_view();
         let sampler = create_sampler(device, filter_mode);
 
@@ -43,7 +43,10 @@ impl Texture {
     }
 }
 
-fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format) -> wgpu::Texture {
+fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, renderable: bool) -> wgpu::Texture {
+    let mut usage = wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST;
+    if renderable { usage |= wgpu::TextureUsage::OUTPUT_ATTACHMENT; }
+
     let descriptor = wgpu::TextureDescriptor {
         size: extent(size),
         array_layer_count: 1,
@@ -51,7 +54,7 @@ fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Forma
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: format.texture_format(),
-        usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+        usage,
         label: None,
     };
 

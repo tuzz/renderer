@@ -27,8 +27,27 @@ impl Renderer {
     }
 
     pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
+        match pipeline.target {
+            crate::Target::Screen => self.render_to_screen(pipeline, clear_color, count),
+            crate::Target::Texture(index, _) => self.render_to_texture(index, pipeline, clear_color, count),
+        }
+    }
+
+    // You can render to a different target than was specified when setting up
+    // the pipeline but it might crash(?) if the texture format is different.
+
+    pub fn render_to_screen(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
         let frame = self.swap_chain.get_next_texture().unwrap();
         let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, count);
+
+        self.queue.submit(&[commands]);
+    }
+
+    pub fn render_to_texture(&mut self, index: usize, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
+        let relative_index = texture_index(index, &pipeline.program);
+
+        let (texture, _) = &pipeline.program.textures[relative_index];
+        let commands = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, count);
 
         self.queue.submit(&[commands]);
     }
@@ -52,7 +71,7 @@ impl Renderer {
     }
 
     pub fn set_uniform(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
-        let relative_index = index - pipeline.program.instances.len();
+        let relative_index = uniform_index(index, &pipeline.program);
 
         let (uniform, _) = &pipeline.program.uniforms[relative_index];
         let option = uniform.buffer.set_data(&self.device, data);
@@ -63,12 +82,23 @@ impl Renderer {
     }
 
     pub fn set_texture(&self, pipeline: &crate::Pipeline, index: usize, data: &[u8]) {
-        let relative_index = index - pipeline.program.instances.len() - pipeline.program.uniforms.len();
+        let relative_index = texture_index(index, &pipeline.program);
 
         let (texture, _) = &pipeline.program.textures[relative_index];
         let commands = texture.set_data(&self.device, data);
 
         self.queue.submit(&[commands]);
+    }
+
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, mut target: crate::Target) -> crate::Pipeline {
+        if let crate::Target::Texture(index, option) = &mut target {
+            let relative_index = texture_index(*index, &program);
+            let (texture, _) = &program.textures[relative_index];
+
+            option.replace(texture.format);
+        }
+
+        crate::Pipeline::new(&self.device, program, blend_mode, primitive, target)
     }
 
     pub fn attribute(&self, location: usize, size: u32) -> crate::Attribute {
@@ -83,16 +113,20 @@ impl Renderer {
         crate::Uniform::new(&self.device, size)
     }
 
-    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format) -> crate::Texture {
-        crate::Texture::new(&self.device, (width, height), filter_mode, format)
+    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool) -> crate::Texture {
+        crate::Texture::new(&self.device, (width, height), filter_mode, format, renderable)
     }
 
     pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, instances: crate::Instances, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {
         crate::Program::new(&self.device, vert, frag, attributes, instances, uniforms, textures)
     }
 
-    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> crate::Pipeline {
-        crate::Pipeline::new(&self.device, program, blend_mode, primitive)
+    pub fn screen_target(&self) -> crate::Target {
+        crate::Target::Screen
+    }
+
+    pub fn texture_target(&self, index: usize) -> crate::Target {
+        crate::Target::Texture(index, None)
     }
 
     pub fn bgra_u8(&self) -> crate::Format {
@@ -167,13 +201,24 @@ fn get_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
 }
 
 fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surface, device: &wgpu::Device) -> wgpu::SwapChain {
+    let format = crate::Target::Screen.format();
+
     let descriptor = wgpu::SwapChainDescriptor {
         width: window_size.width,
         height: window_size.height,
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT, // Writes to the screen
-        format: wgpu::TextureFormat::Bgra8UnormSrgb,  // Guaranteed to be supported
+        format: format.texture_format(),              // Guaranteed to be supported
         present_mode: wgpu::PresentMode::Fifo,        // Enable vsync
     };
 
     device.create_swap_chain(surface, &descriptor)
+}
+
+
+fn uniform_index(index: usize, program: &crate::Program) -> usize {
+    index - program.instances.len()
+}
+
+fn texture_index(index: usize, program: &crate::Program) -> usize {
+    index - program.instances.len() - program.uniforms.len()
 }

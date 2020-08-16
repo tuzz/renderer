@@ -24,7 +24,7 @@ fn main() {
     let a_position = renderer.attribute(A_POSITION, 2);
     let a_tex_coord = renderer.attribute(A_TEX_COORD, 2);
     let i_offset = renderer.instance(2);
-    let t_texture = renderer.texture(width, height, filter, format);
+    let t_texture = renderer.texture(width, height, filter, format, false);
 
     let program = renderer.program(vert, frag, vec![
         a_position,                                         // attribute 0
@@ -39,7 +39,8 @@ fn main() {
 
     let blend_mode = renderer.pre_multiplied_blend();
     let primitive = renderer.triangle_strip_primitive();
-    let pipeline = renderer.pipeline(program, blend_mode, primitive);
+    let target = renderer.screen_target();
+    let pipeline = renderer.pipeline(program, blend_mode, primitive, target);
     let clear_color = renderer.clear_color(0., 0., 0., 0.);
 
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
