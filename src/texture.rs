@@ -1,10 +1,10 @@
 use std::mem;
 
 pub struct Texture {
-    inner: wgpu::Texture,
-    view: wgpu::TextureView,
-    sampler: wgpu::Sampler,
-    size: (u32, u32),
+    pub inner: wgpu::Texture,
+    pub view: wgpu::TextureView,
+    pub sampler: wgpu::Sampler,
+    pub size: (u32, u32),
 }
 
 impl Texture {
@@ -25,6 +25,20 @@ impl Texture {
 
         encoder.copy_buffer_to_texture(buffer_copy, texture_copy, extent(self.size));
         encoder.finish()
+    }
+
+    pub fn create_bind_group(&self, device: &wgpu::Device, visibility: &crate::Visibility) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
+        let l1 = texture_binding_layout(visibility);
+        let l2 = sampler_binding_layout(visibility);
+        let descriptor = wgpu::BindGroupLayoutDescriptor { bindings: &[l1, l2], label: None };
+        let layout = device.create_bind_group_layout(&descriptor);
+
+        let b1 = texture_binding(&self.view);
+        let b2 = sampler_binding(&self.sampler);
+        let descriptor = wgpu::BindGroupDescriptor { layout: &layout, bindings: &[b1, b2], label: None };
+        let bind_group = device.create_bind_group(&descriptor);
+
+        (bind_group, layout)
     }
 }
 
@@ -83,4 +97,28 @@ fn texture_copy_view(texture: &wgpu::Texture) -> wgpu::TextureCopyView {
         array_layer: 0,
         origin: wgpu::Origin3d::ZERO,
     }
+}
+
+fn texture_binding_layout(visibility: &crate::Visibility) -> wgpu::BindGroupLayoutEntry {
+    let ty = wgpu::BindingType::SampledTexture {
+        multisampled: false,
+        dimension: wgpu::TextureViewDimension::D2,
+        component_type: wgpu::TextureComponentType::Uint, // TODO: extract
+    };
+
+    wgpu::BindGroupLayoutEntry { binding: 0, visibility: visibility.shader_stage(), ty }
+}
+
+fn sampler_binding_layout(visibility: &crate::Visibility) -> wgpu::BindGroupLayoutEntry {
+    let ty = wgpu::BindingType::Sampler { comparison: false };
+
+    wgpu::BindGroupLayoutEntry { binding: 1, visibility: visibility.shader_stage(), ty }
+}
+
+fn texture_binding(texture_view: &wgpu::TextureView) -> wgpu::Binding {
+    wgpu::Binding { binding: 0, resource: wgpu::BindingResource::TextureView(texture_view) }
+}
+
+fn sampler_binding(sampler: &wgpu::Sampler) -> wgpu::Binding {
+    wgpu::Binding { binding: 1, resource: wgpu::BindingResource::Sampler(sampler) }
 }
