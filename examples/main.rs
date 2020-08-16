@@ -3,7 +3,8 @@ use winit::{event, event_loop, window};
 const A_POSITION: usize = 0;
 const A_TEX_COORD: usize = 1;
 
-const U_TEXTURE: usize = 0;
+const U_OFFSET: usize = 0;
+const U_TEXTURE: usize = 1;
 
 fn main() {
     renderer::Compiler::compile_shaders("src/shaders");
@@ -20,10 +21,18 @@ fn main() {
 
     let a_position = renderer.attribute(A_POSITION, 2);
     let a_tex_coord = renderer.attribute(A_TEX_COORD, 2);
-    let filter_mode = renderer.linear_filtering();
-    let u_texture = renderer.texture(width, height, filter_mode);
-    let visibility = renderer.visible_to_fragment_shader();
-    let program = renderer.program(vert, frag, vec![a_position, a_tex_coord], vec![(u_texture, visibility)]);
+    let u_offset = renderer.uniform(2);
+    let u_texture = renderer.texture(width, height, renderer.linear_filtering());
+
+    let program = renderer.program(vert, frag, vec![
+        a_position,                                         // attribute 0
+        a_tex_coord,                                        // attribute 1
+    ], vec![
+        (u_offset, renderer.visible_to_vertex_shader()),    // uniform 0
+    ], vec![
+        (u_texture, renderer.visible_to_fragment_shader()), // uniform 1
+    ]);
+
     let blend_mode = renderer.pre_multiplied_blend();
     let primitive = renderer.triangle_strip_primitive();
     let pipeline = renderer.pipeline(program, blend_mode, primitive);
@@ -31,6 +40,7 @@ fn main() {
 
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5]);
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
+    renderer.set_uniform(&pipeline, U_OFFSET, &[0.3, 0.3]);
     renderer.set_texture(&pipeline, U_TEXTURE, &image);
 
     event_loop.run(move |event, _, control_flow| {
