@@ -1,3 +1,4 @@
+mod aspect_ratio;
 mod attribute;
 mod blend_mode;
 mod buffer;
@@ -15,6 +16,7 @@ mod texture;
 mod uniform;
 mod visibility;
 
+pub use aspect_ratio::*;
 pub use attribute::*;
 pub use blend_mode::*;
 pub use buffer::*;

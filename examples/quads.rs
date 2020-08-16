@@ -69,6 +69,9 @@ fn main() {
     let pipeline = renderer.pipeline(program, blend_mode, primitive, target);
     let clear_color = renderer.clear_color(0., 0., 0., 0.);
 
+    // Set the window's viewport to a square, surrounded by black borders.
+    let aspect_ratio = renderer.aspect_ratio(1., 1.); // e.g. (16., 9.)
+
     // Set all the data that won't change per render. Quads are made of four x, y coordinates.
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
@@ -96,7 +99,7 @@ fn main() {
                 renderer.set_instanced(&pipeline, I_OFFSET, &[x1.0, y1.0, x2.0, y2.0]);
 
                 // Render two instances, each comprised for four vertices.
-                renderer.render(&pipeline, Some(clear_color), (2, 4));
+                renderer.render(&pipeline, Some(clear_color), (2, 4), Some(aspect_ratio));
             },
             event::Event::MainEventsCleared => {
                 window.request_redraw();
