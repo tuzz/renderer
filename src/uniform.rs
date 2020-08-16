@@ -1,6 +1,6 @@
 pub struct Uniform {
-    buffer: crate::Buffer,
-    size: u32,
+    pub buffer: crate::Buffer,
+    pub size: u32,
 }
 
 impl Uniform {

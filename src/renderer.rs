@@ -42,8 +42,19 @@ impl Renderer {
         }
     }
 
+    pub fn set_uniform(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
+        let (uniform, _) = &pipeline.program.uniforms[index];
+        let option = uniform.buffer.set_data(&self.device, data);
+
+        if let Some(commands) = option {
+            self.queue.submit(&[commands]);
+        }
+    }
+
     pub fn set_texture(&self, pipeline: &crate::Pipeline, index: usize, data: &[u8]) {
-        let (texture, _) = &pipeline.program.textures[index];
+        let relative_index = index - pipeline.program.uniforms.len();
+
+        let (texture, _) = &pipeline.program.textures[relative_index];
         let commands = texture.set_data(&self.device, data);
 
         self.queue.submit(&[commands]);
@@ -53,12 +64,16 @@ impl Renderer {
         crate::Attribute::new(&self.device, location, size)
     }
 
+    pub fn uniform(&self, size: u32) -> crate::Uniform {
+        crate::Uniform::new(&self.device, size)
+    }
+
     pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode) -> crate::Texture {
         crate::Texture::new(&self.device, (width, height), filter_mode)
     }
 
-    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: Vec<crate::Attribute>, textures: Vec<(crate::Texture, crate::Visibility)>) -> crate::Program {
-        crate::Program::new(&self.device, vert, frag, attributes, textures)
+    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {
+        crate::Program::new(&self.device, vert, frag, attributes, uniforms, textures)
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> crate::Pipeline {
