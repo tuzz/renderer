@@ -5,15 +5,16 @@ pub struct Texture {
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
     pub size: (u32, u32),
+    pub format: crate::Format,
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode) -> Self {
-        let inner = create_texture(device, size);
+    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format) -> Self {
+        let inner = create_texture(device, size, &format);
         let view = inner.create_default_view();
         let sampler = create_sampler(device, filter_mode);
 
-        Self { inner, view, sampler, size }
+        Self { inner, view, sampler, size, format }
     }
 
     pub fn set_data(&self, device: &wgpu::Device, data: &[u8]) -> wgpu::CommandBuffer {
@@ -28,7 +29,7 @@ impl Texture {
     }
 
     pub fn create_bind_group(&self, device: &wgpu::Device, visibility: &crate::Visibility) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
-        let l1 = texture_binding_layout(visibility);
+        let l1 = texture_binding_layout(visibility, &self.format);
         let l2 = sampler_binding_layout(visibility);
         let descriptor = wgpu::BindGroupLayoutDescriptor { bindings: &[l1, l2], label: None };
         let layout = device.create_bind_group_layout(&descriptor);
@@ -42,14 +43,14 @@ impl Texture {
     }
 }
 
-fn create_texture(device: &wgpu::Device, size: (u32, u32)) -> wgpu::Texture {
+fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format) -> wgpu::Texture {
     let descriptor = wgpu::TextureDescriptor {
         size: extent(size),
         array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Rgba8UnormSrgb,
+        format: format.texture_format(),
         usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
         label: None,
     };
@@ -99,11 +100,11 @@ fn texture_copy_view(texture: &wgpu::Texture) -> wgpu::TextureCopyView {
     }
 }
 
-fn texture_binding_layout(visibility: &crate::Visibility) -> wgpu::BindGroupLayoutEntry {
+fn texture_binding_layout(visibility: &crate::Visibility, format: &crate::Format) -> wgpu::BindGroupLayoutEntry {
     let ty = wgpu::BindingType::SampledTexture {
         multisampled: false,
         dimension: wgpu::TextureViewDimension::D2,
-        component_type: wgpu::TextureComponentType::Uint, // TODO: extract
+        component_type: format.component_type(),
     };
 
     wgpu::BindGroupLayoutEntry { binding: 0, visibility: visibility.shader_stage(), ty }

@@ -1,21 +1,21 @@
 pub struct BlendMode {
-    pub descriptor: wgpu::ColorStateDescriptor,
+    pub src_factor: wgpu::BlendFactor,
+    pub dst_factor: wgpu::BlendFactor,
 }
 
 impl BlendMode {
-    pub fn new(src_factor: wgpu::BlendFactor, dst_factor: wgpu::BlendFactor) -> Self {
-        let blend_descriptor = blend_descriptor(src_factor, dst_factor);
-        let descriptor = color_state_descriptor(blend_descriptor);
-
-        Self { descriptor }
-    }
-
     pub fn additive() -> Self {
-        Self::new(wgpu::BlendFactor::One, wgpu::BlendFactor::One)
+        Self { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::One }
     }
 
     pub fn pre_multiplied_alpha() -> Self {
-        Self::new(wgpu::BlendFactor::One, wgpu::BlendFactor::OneMinusSrcAlpha)
+        Self { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha }
+    }
+
+    pub fn descriptor(&self, target_format: crate::Format) -> wgpu::ColorStateDescriptor {
+        let blend_descriptor = blend_descriptor(self.src_factor, self.dst_factor);
+
+        color_state_descriptor(blend_descriptor, target_format)
     }
 }
 
@@ -27,11 +27,11 @@ fn blend_descriptor(src_factor: wgpu::BlendFactor, dst_factor: wgpu::BlendFactor
     }
 }
 
-fn color_state_descriptor(blend_descriptor: wgpu::BlendDescriptor) -> wgpu::ColorStateDescriptor {
+fn color_state_descriptor(blend_descriptor: wgpu::BlendDescriptor, target_format: crate::Format) -> wgpu::ColorStateDescriptor {
     wgpu::ColorStateDescriptor {
         color_blend: blend_descriptor.clone(),
         alpha_blend: blend_descriptor,
-        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+        format: target_format.texture_format(),
         write_mask: wgpu::ColorWrite::ALL,
     }
 }

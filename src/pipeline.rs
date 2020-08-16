@@ -47,7 +47,7 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
         fragment_stage: Some(programmable_stage(&program.fragment_shader)),
         rasterization_state: None,
         primitive_topology: primitive.topology(),
-        color_states: &[blend_mode.descriptor.clone()],
+        color_states: &[blend_mode.descriptor(crate::Format::BgraU8)], // TODO
         depth_stencil_state: None,
         vertex_state: vertex_state(&vertex_buffers),
         sample_count: 1,

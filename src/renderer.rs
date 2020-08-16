@@ -83,8 +83,8 @@ impl Renderer {
         crate::Uniform::new(&self.device, size)
     }
 
-    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode) -> crate::Texture {
-        crate::Texture::new(&self.device, (width, height), filter_mode)
+    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format) -> crate::Texture {
+        crate::Texture::new(&self.device, (width, height), filter_mode, format)
     }
 
     pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, instances: crate::Instances, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {
@@ -93,6 +93,22 @@ impl Renderer {
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> crate::Pipeline {
         crate::Pipeline::new(&self.device, program, blend_mode, primitive)
+    }
+
+    pub fn bgra_u8(&self) -> crate::Format {
+        crate::Format::BgraU8
+    }
+
+    pub fn rgba_u8(&self) -> crate::Format {
+        crate::Format::RgbaU8
+    }
+
+    pub fn rgba_f16(&self) -> crate::Format {
+        crate::Format::RgbaF16
+    }
+
+    pub fn rgba_f32(&self) -> crate::Format {
+        crate::Format::RgbaF32
     }
 
     pub fn linear_filtering(&self) -> crate::FilterMode {

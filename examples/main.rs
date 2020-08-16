@@ -18,11 +18,13 @@ fn main() {
 
     let letter_f = include_bytes!("../src/images/letter_f.png");
     let (image, width, height) = load_image(letter_f);
+    let filter = renderer.linear_filtering();
+    let format = renderer.rgba_u8();
 
     let a_position = renderer.attribute(A_POSITION, 2);
     let a_tex_coord = renderer.attribute(A_TEX_COORD, 2);
     let i_offset = renderer.instance(2);
-    let t_texture = renderer.texture(width, height, renderer.linear_filtering());
+    let t_texture = renderer.texture(width, height, filter, format);
 
     let program = renderer.program(vert, frag, vec![
         a_position,                                         // attribute 0
