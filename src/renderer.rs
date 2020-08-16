@@ -42,16 +42,43 @@ impl Renderer {
         }
     }
 
+    pub fn set_texture(&self, pipeline: &crate::Pipeline, index: usize, data: &[u8]) {
+        let (texture, _) = &pipeline.program.textures[index];
+        let commands = texture.set_data(&self.device, data);
+
+        self.queue.submit(&[commands]);
+    }
+
     pub fn attribute(&self, location: usize, size: u32) -> crate::Attribute {
         crate::Attribute::new(&self.device, location, size)
     }
 
-    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: Vec<crate::Attribute>) -> crate::Program {
-        crate::Program::new(&self.device, vert, frag, attributes)
+    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode) -> crate::Texture {
+        crate::Texture::new(&self.device, (width, height), filter_mode)
+    }
+
+    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: Vec<crate::Attribute>, textures: Vec<(crate::Texture, crate::Visibility)>) -> crate::Program {
+        crate::Program::new(&self.device, vert, frag, attributes, textures)
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive) -> crate::Pipeline {
         crate::Pipeline::new(&self.device, program, blend_mode, primitive)
+    }
+
+    pub fn linear_filtering(&self) -> crate::FilterMode {
+        crate::FilterMode::Linear
+    }
+
+    pub fn nearest_filtering(&self) -> crate::FilterMode {
+        crate::FilterMode::Nearest
+    }
+
+    pub fn visible_to_vertex_shader(&self) -> crate::Visibility {
+        crate::Visibility::VertexShader
+    }
+
+    pub fn visible_to_fragment_shader(&self) -> crate::Visibility {
+        crate::Visibility::FragmentShader
     }
 
     pub fn additive_blend(&self) -> crate::BlendMode {

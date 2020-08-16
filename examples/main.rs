@@ -3,6 +3,8 @@ use winit::{event, event_loop, window};
 const A_POSITION: usize = 0;
 const A_COLOR: usize = 1;
 
+const U_TEXTURE: usize = 0;
+
 fn main() {
     renderer::Compiler::compile_shaders("src/shaders");
 
@@ -18,18 +20,22 @@ fn main() {
 
     let a_position = renderer.attribute(A_POSITION, 2);
     let a_color = renderer.attribute(A_COLOR, 3);
-    let program = renderer.program(vert, frag, vec![a_position, a_color]);
+    let filter_mode = renderer.linear_filtering();
+    let u_texture = renderer.texture(width, height, filter_mode);
+    let visibility = renderer.visible_to_fragment_shader();
+    let program = renderer.program(vert, frag, vec![a_position, a_color], vec![(u_texture, visibility)]);
     let blend_mode = renderer.pre_multiplied_blend();
     let primitive = renderer.triangle_strip_primitive();
     let pipeline = renderer.pipeline(program, blend_mode, primitive);
     let clear_color = renderer.clear_color(0., 0., 0., 0.);
 
+    renderer.set_attribute(&pipeline, A_POSITION, &[0., 1., -1., -1., 1., -1., 0., -0.]);
+    renderer.set_attribute(&pipeline, A_COLOR, &[1., 0., 0., 0., 1., 0., 0., 0., 1., 1., 0., 0.]);
+    renderer.set_texture(&pipeline, U_TEXTURE, &image);
+
     event_loop.run(move |event, _, control_flow| {
         match event {
             event::Event::RedrawRequested(_) => {
-                renderer.set_attribute(&pipeline, A_POSITION, &[0., 1., -1., -1., 1., -1., 0., -0.]);
-                renderer.set_attribute(&pipeline, A_COLOR, &[1., 0., 0., 0., 1., 0., 0., 0., 1., 1., 0., 0.]);
-
                 renderer.render(&pipeline, Some(clear_color), (1, 4));
             },
             event::Event::MainEventsCleared => {

@@ -8,7 +8,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: &crate::FilterMode) -> Self {
+    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode) -> Self {
         let inner = create_texture(device, size);
         let view = inner.create_default_view();
         let sampler = create_sampler(device, filter_mode);
@@ -47,7 +47,7 @@ fn extent((width, height): (u32, u32)) -> wgpu::Extent3d {
     wgpu::Extent3d { width, height, depth: 1 }
 }
 
-fn create_sampler(device: &wgpu::Device, filter_mode: &crate::FilterMode) -> wgpu::Sampler {
+fn create_sampler(device: &wgpu::Device, filter_mode: crate::FilterMode) -> wgpu::Sampler {
     let descriptor = wgpu::SamplerDescriptor {
         address_mode_u: wgpu::AddressMode::ClampToEdge,
         address_mode_v: wgpu::AddressMode::ClampToEdge,

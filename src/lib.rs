@@ -9,6 +9,7 @@ mod program;
 mod renderer;
 mod render_pass;
 mod texture;
+mod visibility;
 
 pub use attribute::*;
 pub use blend_mode::*;
@@ -21,6 +22,7 @@ pub use program::*;
 pub use renderer::*;
 pub use render_pass::*;
 pub use texture::*;
+pub use visibility::*;
 
 #[cfg(feature="shader_compilation")] mod compiler;
 #[cfg(feature="shader_compilation")] pub use compiler::*;

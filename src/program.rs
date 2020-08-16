@@ -4,14 +4,15 @@ pub struct Program {
     pub vertex_shader: wgpu::ShaderModule,
     pub fragment_shader: wgpu::ShaderModule,
     pub attributes: Vec<crate::Attribute>,
+    pub textures: Vec<(crate::Texture, crate::Visibility)>,
 }
 
 impl Program {
-    pub fn new(device: &wgpu::Device, vert: &[u8], frag: &[u8], attributes: Vec<crate::Attribute>) -> Self {
+    pub fn new(device: &wgpu::Device, vert: &[u8], frag: &[u8], attributes: Vec<crate::Attribute>, textures: Vec<(crate::Texture, crate::Visibility)>) -> Self {
         let vertex_shader = create_shader_module(device, vert);
         let fragment_shader = create_shader_module(device, frag);
 
-        Self { vertex_shader, fragment_shader, attributes }
+        Self { vertex_shader, fragment_shader, attributes, textures }
     }
 }
 
