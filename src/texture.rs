@@ -1,24 +1,36 @@
+use std::mem;
+
 pub struct Texture {
     inner: wgpu::Texture,
     view: wgpu::TextureView,
     sampler: wgpu::Sampler,
+    size: (u32, u32),
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, bytes: &[u8], size: (u32, u32), filter_mode: &crate::FilterMode) -> Self {
+    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: &crate::FilterMode) -> Self {
         let inner = create_texture(device, size);
         let view = inner.create_default_view();
         let sampler = create_sampler(device, filter_mode);
 
-        Self { inner, view, sampler }
+        Self { inner, view, sampler, size }
+    }
+
+    pub fn set_data(&self, device: &wgpu::Device, data: &[u8]) -> wgpu::CommandBuffer {
+        let buffer = device.create_buffer_with_data(data, wgpu::BufferUsage::COPY_SRC);
+        let mut encoder = create_command_encoder(device);
+
+        let buffer_copy = buffer_copy_view(&buffer, self.size);
+        let texture_copy = texture_copy_view(&self.inner);
+
+        encoder.copy_buffer_to_texture(buffer_copy, texture_copy, extent(self.size));
+        encoder.finish()
     }
 }
 
 fn create_texture(device: &wgpu::Device, size: (u32, u32)) -> wgpu::Texture {
-    let (width, height) = size;
-
     let descriptor = wgpu::TextureDescriptor {
-        size: wgpu::Extent3d { width, height, depth: 1 },
+        size: extent(size),
         array_layer_count: 1,
         mip_level_count: 1,
         sample_count: 1,
@@ -29,6 +41,10 @@ fn create_texture(device: &wgpu::Device, size: (u32, u32)) -> wgpu::Texture {
     };
 
     device.create_texture(&descriptor)
+}
+
+fn extent((width, height): (u32, u32)) -> wgpu::Extent3d {
+    wgpu::Extent3d { width, height, depth: 1 }
 }
 
 fn create_sampler(device: &wgpu::Device, filter_mode: &crate::FilterMode) -> wgpu::Sampler {
@@ -45,4 +61,26 @@ fn create_sampler(device: &wgpu::Device, filter_mode: &crate::FilterMode) -> wgp
     };
 
     device.create_sampler(&descriptor)
+}
+
+fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
+}
+
+fn buffer_copy_view(buffer: &wgpu::Buffer, (width, height): (u32, u32)) -> wgpu::BufferCopyView {
+    wgpu::BufferCopyView {
+        buffer: buffer,
+        offset: 0,
+        bytes_per_row: mem::size_of::<f32>() as u32 * width,
+        rows_per_image: height,
+    }
+}
+
+fn texture_copy_view(texture: &wgpu::Texture) -> wgpu::TextureCopyView {
+    wgpu::TextureCopyView {
+        texture: texture,
+        mip_level: 0,
+        array_layer: 0,
+        origin: wgpu::Origin3d::ZERO,
+    }
 }
