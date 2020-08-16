@@ -105,7 +105,7 @@ impl Renderer {
         crate::Attribute::new(&self.device, location, size)
     }
 
-    pub fn instance(&self, size: u32) -> crate::Instanced {
+    pub fn instanced(&self, size: u32) -> crate::Instanced {
         crate::Instanced::new(&self.device, size)
     }
 
