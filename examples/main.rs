@@ -38,14 +38,23 @@ fn main() {
     let pipeline = renderer.pipeline(program, blend_mode, primitive);
     let clear_color = renderer.clear_color(0., 0., 0., 0.);
 
-    renderer.set_attribute(&pipeline, A_POSITION, &[-0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5]);
+    renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
-    renderer.set_uniform(&pipeline, U_OFFSET, &[0.3, 0.3]);
     renderer.set_texture(&pipeline, U_TEXTURE, &image);
+
+    let mut x = (0.3, 0.015);
+    let mut y = (-0.3, 0.01);
 
     event_loop.run(move |event, _, control_flow| {
         match event {
             event::Event::RedrawRequested(_) => {
+                x.0 += x.1;
+                y.0 += y.1;
+
+                if x.0 > 0.9 || x.0 < -0.9 { x.1 *= -1.; }
+                if y.0 > 0.9 || y.0 < -0.9 { y.1 *= -1.; }
+
+                renderer.set_uniform(&pipeline, U_OFFSET, &[x.0, y.0]);
                 renderer.render(&pipeline, Some(clear_color), (1, 4));
             },
             event::Event::MainEventsCleared => {
