@@ -7,16 +7,16 @@ const I_OFFSET: usize = 0;
 const T_TEXTURE: usize = 1;
 
 fn main() {
-    renderer::Compiler::compile_shaders("src/shaders");
+    renderer::Compiler::compile_shaders("examples/quads");
 
     let event_loop = event_loop::EventLoop::new();
     let window = window::WindowBuilder::new().build(&event_loop).unwrap();
     let mut renderer = renderer::Renderer::new(&window);
 
-    let vert = include_bytes!("../src/shaders/hello.vert.spirv");
-    let frag = include_bytes!("../src/shaders/hello.frag.spirv");
+    let vert = include_bytes!("./quads/hello.vert.spirv");
+    let frag = include_bytes!("./quads/hello.frag.spirv");
 
-    let letter_f = include_bytes!("../src/images/letter_f.png");
+    let letter_f = include_bytes!("./quads/letter_f.png");
     let (image, width, height) = load_image(letter_f);
     let filter = renderer.linear_filtering();
     let format = renderer.rgba_u8();
