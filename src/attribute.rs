@@ -3,6 +3,7 @@ use std::mem;
 pub struct Attribute {
     pub buffer: crate::Buffer,
     pub descriptor: wgpu::VertexAttributeDescriptor,
+    pub location: usize,
     pub size: u32,
 }
 
@@ -14,7 +15,7 @@ impl Attribute {
         let buffer = crate::Buffer::new(device, usage);
         let descriptor = attribute_descriptor(location as u32, size);
 
-        Self { buffer, descriptor, size }
+        Self { buffer, descriptor, location, size }
     }
 }
 

@@ -56,8 +56,8 @@ impl Renderer {
         self.queue.submit(&[commands]);
     }
 
-    pub fn set_attribute(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
-        let attribute = &pipeline.program.attributes[index];
+    pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
+        let attribute = pipeline.program.attributes.iter().find(|a| a.location == location).unwrap();
         let option = attribute.buffer.set_data(&self.device, data);
 
         if let Some(commands) = option {
