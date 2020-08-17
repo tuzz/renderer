@@ -99,7 +99,7 @@ fn main() {
                 renderer.set_instanced(&pipeline, I_OFFSET, &[x1.0, y1.0, x2.0, y2.0]);
 
                 // Render two instances, each comprised for four vertices.
-                renderer.render(&pipeline, Some(clear_color), (2, 4), Some(aspect_ratio));
+                renderer.render(&pipeline, Some(clear_color), Some(aspect_ratio), (2, 4));
             },
             event::Event::MainEventsCleared => {
                 window.request_redraw();

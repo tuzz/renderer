@@ -26,9 +26,9 @@ impl Renderer {
         self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
     }
 
-    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32), aspect: Option<crate::AspectRatio>) {
+    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, aspect: Option<crate::AspectRatio>, count: (u32, u32)) {
         match pipeline.target {
-            crate::Target::Screen => self.render_to_screen(pipeline, clear_color, count, aspect),
+            crate::Target::Screen => self.render_to_screen(pipeline, clear_color, aspect, count),
             crate::Target::Texture(index, _) => self.render_to_texture(index, pipeline, clear_color, count),
         }
     }
@@ -36,13 +36,13 @@ impl Renderer {
     // You can render to a different target than was specified when setting up
     // the pipeline but it might crash(?) if the texture format is different.
 
-    pub fn render_to_screen(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32), mut aspect: Option<crate::AspectRatio>) {
+    pub fn render_to_screen(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, mut aspect: Option<crate::AspectRatio>, count: (u32, u32)) {
         if let Some(aspect_ratio) = &mut aspect {
             aspect_ratio.window_size = Some(self.window_size);
         }
 
         let frame = self.swap_chain.get_next_texture().unwrap();
-        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, count, aspect);
+        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, aspect, count);
 
         self.queue.submit(&[commands]);
     }
@@ -51,7 +51,7 @@ impl Renderer {
         let relative_index = texture_index(index, &pipeline.program);
 
         let (texture, _) = &pipeline.program.textures[relative_index];
-        let commands = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, count, None);
+        let commands = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, None, count);
 
         self.queue.submit(&[commands]);
     }
