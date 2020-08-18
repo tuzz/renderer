@@ -14,6 +14,20 @@ impl Pipeline {
 
         Self { inner, bind_group, program, blend_mode, primitive, target }
     }
+
+    pub fn recreate_on_texture_resize(&mut self, device: &wgpu::Device) {
+        let actual = self.program.textures.iter().map(|(t, _)| t.generation);
+        let expected = &self.program.generations;
+
+        if actual.clone().zip(expected).all(|(g1, g2)| g1 == *g2) { return; }
+
+        let (bind_group, layout) = create_bind_group(device, &self.program);
+        let inner = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layout, &self.target);
+
+        self.bind_group = bind_group;
+        self.inner = inner;
+        self.program.generations = actual.collect();
+    }
 }
 
 fn create_bind_group(device: &wgpu::Device, program: &crate::Program) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {

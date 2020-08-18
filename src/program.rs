@@ -7,6 +7,7 @@ pub struct Program {
     pub instances: Instances,
     pub uniforms: Uniforms,
     pub textures: Textures,
+    pub generations: Vec<u32>,
 }
 
 pub type Attributes = Vec<crate::Attribute>;
@@ -18,8 +19,9 @@ impl Program {
     pub fn new(device: &wgpu::Device, vert: &[u8], frag: &[u8], attributes: Attributes, instances: Instances, uniforms: Uniforms, textures: Textures) -> Self {
         let vertex_shader = create_shader_module(device, vert);
         let fragment_shader = create_shader_module(device, frag);
+        let generations = textures.iter().map(|(t, _)| t.generation).collect();
 
-        Self { vertex_shader, fragment_shader, attributes, instances, uniforms, textures }
+        Self { vertex_shader, fragment_shader, attributes, instances, uniforms, textures, generations }
     }
 }
 
