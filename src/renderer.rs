@@ -27,9 +27,9 @@ impl Renderer {
     }
 
     pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, aspect: Option<crate::AspectRatio>, count: (u32, u32)) {
-        match pipeline.target {
+        match &pipeline.target {
             crate::Target::Screen => self.render_to_screen(pipeline, clear_color, aspect, count),
-            crate::Target::Texture(index, _) => self.render_to_texture(index, pipeline, clear_color, count),
+            crate::Target::Texture(texture) => self.render_to_texture(texture, pipeline, clear_color, count),
         }
     }
 
@@ -47,10 +47,7 @@ impl Renderer {
         self.queue.submit(&[commands]);
     }
 
-    pub fn render_to_texture(&mut self, index: usize, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
-        let relative_index = texture_index(index, &pipeline.program);
-
-        let (texture, _) = &pipeline.program.textures[relative_index];
+    pub fn render_to_texture(&mut self, texture: &crate::Texture, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
         let commands = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, None, count);
 
         self.queue.submit(&[commands]);
@@ -94,14 +91,7 @@ impl Renderer {
         self.queue.submit(&[commands]);
     }
 
-    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, mut target: crate::Target) -> crate::Pipeline {
-        if let crate::Target::Texture(index, option) = &mut target {
-            let relative_index = texture_index(*index, &program);
-            let (texture, _) = &program.textures[relative_index];
-
-            option.replace(texture.format);
-        }
-
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> crate::Pipeline {
         crate::Pipeline::new(&self.device, program, blend_mode, primitive, target)
     }
 
@@ -129,8 +119,8 @@ impl Renderer {
         crate::Target::Screen
     }
 
-    pub fn texture_target(&self, index: usize) -> crate::Target {
-        crate::Target::Texture(index, None)
+    pub fn texture_target(&self, texture: crate::Texture) -> crate::Target {
+        crate::Target::Texture(texture)
     }
 
     pub fn bgra_u8(&self) -> crate::Format {
