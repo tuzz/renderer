@@ -1,5 +1,11 @@
+use std::{cell, ops};
+
 pub struct Pipeline {
-    pub inner: wgpu::RenderPipeline,
+    pub inner: cell::RefCell<InnerP>,
+}
+
+pub struct InnerP {
+    pub pipeline: wgpu::RenderPipeline,
     pub bind_group: wgpu::BindGroup,
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
@@ -10,23 +16,25 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> Self {
         let (bind_group, layout) = create_bind_group(device, &program);
-        let inner = create_render_pipeline(device, &program, &blend_mode, &primitive, &layout, &target);
+        let pipeline = create_render_pipeline(device, &program, &blend_mode, &primitive, &layout, &target);
+        let inner = InnerP { pipeline, bind_group, program, blend_mode, primitive, target };
 
-        Self { inner, bind_group, program, blend_mode, primitive, target }
+        Self { inner: cell::RefCell::new(inner) }
     }
 
-    pub fn recreate_on_texture_resize(&mut self, device: &wgpu::Device) {
+    pub fn recreate_on_texture_resize(&self, device: &wgpu::Device) {
         let actual = self.program.textures.iter().map(|(t, _)| t.generation);
         let expected = &self.program.generations;
 
         if actual.clone().zip(expected).all(|(g1, g2)| g1 == *g2) { return; }
 
         let (bind_group, layout) = create_bind_group(device, &self.program);
-        let inner = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layout, &self.target);
+        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layout, &self.target);
 
-        self.bind_group = bind_group;
-        self.inner = inner;
-        self.program.generations = actual.collect();
+        let mut inner = self.inner.borrow_mut();
+        inner.bind_group = bind_group;
+        inner.pipeline = pipeline;
+        inner.program.generations = actual.collect();
     }
 }
 
@@ -113,4 +121,12 @@ fn vertex_buffers(slice: &[DescriptorsAndSize]) -> Vec<wgpu::VertexBufferDescrip
 
 fn vertex_state<'a>(vertex_buffers: &'a [wgpu::VertexBufferDescriptor]) -> wgpu::VertexStateDescriptor<'a> {
     wgpu::VertexStateDescriptor { index_format: wgpu::IndexFormat::Uint16, vertex_buffers }
+}
+
+impl ops::Deref for Pipeline {
+    type Target = InnerP;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &self.inner.try_borrow_unguarded().unwrap() }
+    }
 }

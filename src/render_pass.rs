@@ -5,6 +5,8 @@ type Aspect = Option<crate::AspectRatio>;
 
 impl RenderPass {
     pub fn render(device: &wgpu::Device, target: &wgpu::TextureView, pipeline: &crate::Pipeline, clear: Clear, aspect: Aspect, count: (u32, u32)) -> wgpu::CommandBuffer {
+        pipeline.recreate_on_texture_resize(device);
+
         let color_attachments = color_attachments(target, clear);
         let descriptor = render_pass_descriptor(&color_attachments);
         let attributes = &pipeline.program.attributes;
@@ -13,7 +15,7 @@ impl RenderPass {
         let mut encoder = create_command_encoder(device);
         let mut render_pass = encoder.begin_render_pass(&descriptor);
 
-        render_pass.set_pipeline(&pipeline.inner);
+        render_pass.set_pipeline(&pipeline.pipeline);
         render_pass.set_bind_group(0, &pipeline.bind_group, &[]);
 
         for (slot, attribute) in attributes.iter().enumerate() {
