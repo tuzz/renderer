@@ -14,10 +14,7 @@ impl RenderPass {
         let mut render_pass = encoder.begin_render_pass(&descriptor);
 
         render_pass.set_pipeline(&pipeline.inner);
-
-        for (index, bind_group) in pipeline.bind_groups.iter().enumerate() {
-            render_pass.set_bind_group(index as u32, bind_group, &[]);
-        }
+        render_pass.set_bind_group(0, &pipeline.bind_group, &[]);
 
         for (slot, attribute) in attributes.iter().enumerate() {
             render_pass.set_vertex_buffer(slot as u32, &attribute.buffer, 0, 0);

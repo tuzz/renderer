@@ -1,6 +1,6 @@
 pub struct Pipeline {
     pub inner: wgpu::RenderPipeline,
-    pub bind_groups: Vec<wgpu::BindGroup>,
+    pub bind_group: wgpu::BindGroup,
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
     pub primitive: crate::Primitive,
@@ -9,41 +9,51 @@ pub struct Pipeline {
 
 impl Pipeline {
     pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> Self {
-        let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let inner = create_render_pipeline(device, &program, &blend_mode, &primitive, &layouts, &target);
+        let (bind_group, layout) = create_bind_group(device, &program);
+        let inner = create_render_pipeline(device, &program, &blend_mode, &primitive, &layout, &target);
 
-        Self { inner, bind_groups, program, blend_mode, primitive, target }
+        Self { inner, bind_group, program, blend_mode, primitive, target }
     }
 }
 
-fn create_bind_groups(device: &wgpu::Device, program: &crate::Program) -> (Vec<wgpu::BindGroup>, Vec<wgpu::BindGroupLayout>) {
-    let mut bind_groups = vec![];
+fn create_bind_group(device: &wgpu::Device, program: &crate::Program) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
+    let mut bindings = vec![];
     let mut layouts = vec![];
+    let mut binding_id = 0;
 
     for instanced in &program.instances {
-        let (bind_group, layout) = instanced.create_bind_group(device);
-        bind_groups.push(bind_group); layouts.push(layout);
+        let (binding, layout) = instanced.binding(binding_id);
+        bindings.push(binding); layouts.push(layout); binding_id += 1;
     }
 
     for (uniform, visibility) in &program.uniforms {
-        let (bind_group, layout) = uniform.create_bind_group(device, visibility);
-        bind_groups.push(bind_group); layouts.push(layout);
+        let (binding, layout) = uniform.binding(visibility, binding_id);
+        bindings.push(binding); layouts.push(layout); binding_id += 1;
     }
 
     for (texture, visibility) in &program.textures {
-        let (bind_group, layout) = texture.create_bind_group(device, visibility);
-        bind_groups.push(bind_group); layouts.push(layout);
+        let (binding, layout) = texture.texture_binding(visibility, binding_id);
+        bindings.push(binding); layouts.push(layout); binding_id += 1;
+
+        let (binding, layout) = texture.sampler_binding(visibility, binding_id);
+        bindings.push(binding); layouts.push(layout); binding_id += 1;
     }
 
-    (bind_groups, layouts)
+    let descriptor = wgpu::BindGroupLayoutDescriptor { bindings: &layouts, label: None };
+    let layout = device.create_bind_group_layout(&descriptor);
+
+    let descriptor = wgpu::BindGroupDescriptor { layout: &layout, bindings: &bindings, label: None };
+    let bind_group = device.create_bind_group(&descriptor);
+
+    (bind_group, layout)
 }
 
-fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], target: &crate::Target) -> wgpu::RenderPipeline {
+fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layout: &wgpu::BindGroupLayout, target: &crate::Target) -> wgpu::RenderPipeline {
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
 
     let descriptor = wgpu::RenderPipelineDescriptor {
-        layout: &create_layout(device, layouts),
+        layout: &create_layout(device, layout),
         vertex_stage: programmable_stage(&program.vertex_shader),
         fragment_stage: Some(programmable_stage(&program.fragment_shader)),
         rasterization_state: None,
@@ -59,9 +69,8 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
     device.create_render_pipeline(&descriptor)
 }
 
-fn create_layout(device: &wgpu::Device, layouts: &[wgpu::BindGroupLayout]) -> wgpu::PipelineLayout {
-    let bind_group_layouts = &layouts.iter().collect::<Vec<_>>();
-    let descriptor = wgpu::PipelineLayoutDescriptor { bind_group_layouts };
+fn create_layout(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::PipelineLayout {
+    let descriptor = wgpu::PipelineLayoutDescriptor { bind_group_layouts: &[layout] };
 
     device.create_pipeline_layout(&descriptor)
 }

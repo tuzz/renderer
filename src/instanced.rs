@@ -11,27 +11,22 @@ impl Instanced {
         Self { buffer, size }
     }
 
-    pub fn create_bind_group(&self, device: &wgpu::Device) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
-        let l1 = instanced_binding_layout();
-        let descriptor = wgpu::BindGroupLayoutDescriptor { bindings: &[l1], label: None };
-        let layout = device.create_bind_group_layout(&descriptor);
+    pub fn binding(&self, id: u32) -> (wgpu::Binding, wgpu::BindGroupLayoutEntry) {
+        let layout = instanced_binding_layout(id);
+        let binding = instanced_binding(id, &self.buffer, self.size);
 
-        let b1 = instanced_binding(&self.buffer, self.size);
-        let descriptor = wgpu::BindGroupDescriptor { layout: &layout, bindings: &[b1], label: None };
-        let bind_group = device.create_bind_group(&descriptor);
-
-        (bind_group, layout)
+        (binding, layout)
     }
 }
 
-fn instanced_binding_layout() -> wgpu::BindGroupLayoutEntry {
+fn instanced_binding_layout(id: u32) -> wgpu::BindGroupLayoutEntry {
     let ty = wgpu::BindingType::StorageBuffer { dynamic: false, readonly: true };
 
-    wgpu::BindGroupLayoutEntry { binding: 0, visibility: wgpu::ShaderStage::VERTEX, ty }
+    wgpu::BindGroupLayoutEntry { binding: id, visibility: wgpu::ShaderStage::VERTEX, ty }
 }
 
-fn instanced_binding(buffer: &wgpu::Buffer, size: u32) -> wgpu::Binding {
+fn instanced_binding(id: u32, buffer: &wgpu::Buffer, size: u32) -> wgpu::Binding {
     let len = (size * std::mem::size_of::<f32>() as u32) as wgpu::BufferAddress;
 
-    wgpu::Binding { binding: 0, resource: wgpu::BindingResource::Buffer { buffer, range: 0..len } }
+    wgpu::Binding { binding: id, resource: wgpu::BindingResource::Buffer { buffer, range: 0..len } }
 }
