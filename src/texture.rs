@@ -11,6 +11,8 @@ pub struct InnerT {
     pub sampler: wgpu::Sampler,
     pub size: (u32, u32),
     pub format: crate::Format,
+    pub renderable: bool,
+    pub generation: u32,
 }
 
 impl Texture {
@@ -18,9 +20,18 @@ impl Texture {
         let texture = create_texture(device, size, &format, renderable);
         let view = texture.create_default_view();
         let sampler = create_sampler(device, filter_mode);
-        let inner = InnerT { texture, view, sampler, size, format };
+        let inner = InnerT { texture, view, sampler, size, format, renderable, generation: 0 };
 
         Self { inner: rc::Rc::new(inner) }
+    }
+
+    pub fn resize(&mut self, device: &wgpu::Device, new_size: (u32, u32)) {
+        self.size = new_size;
+        self.texture = create_texture(device, self.size, &self.format, self.renderable);
+        self.view = self.texture.create_default_view();
+
+        // Use generational indexing so pipelines know when they need to be recreated.
+        self.generation += 1;
     }
 
     pub fn set_data(&self, device: &wgpu::Device, data: &[u8]) -> wgpu::CommandBuffer {
@@ -138,5 +149,11 @@ impl ops::Deref for Texture {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl ops::DerefMut for Texture {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        rc::Rc::get_mut(&mut self.inner).unwrap()
     }
 }
