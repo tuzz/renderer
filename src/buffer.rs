@@ -1,10 +1,10 @@
 use std::{cell, mem, ops};
 
 pub struct Buffer {
-    pub inner: cell::RefCell<Inner>,
+    pub inner: cell::RefCell<InnerB>,
 }
 
-pub struct Inner {
+pub struct InnerB {
     pub buffer: wgpu::Buffer,
     pub size: usize,
 }
@@ -14,7 +14,7 @@ const INITIAL_SIZE: usize = mem::size_of::<f32>() * 1024;
 impl Buffer {
     pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsage) -> Self {
         let buffer = create_buffer(device, usage);
-        let inner = Inner { buffer, size: INITIAL_SIZE };
+        let inner = InnerB { buffer, size: INITIAL_SIZE };
 
         Self { inner: cell::RefCell::new(inner) }
     }

@@ -1,7 +1,12 @@
-use std::mem;
+use std::{mem, ops, rc};
 
+#[derive(Clone)]
 pub struct Texture {
-    pub inner: wgpu::Texture,
+    pub inner: rc::Rc<InnerT>,
+}
+
+pub struct InnerT {
+    pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
     pub size: (u32, u32),
@@ -10,11 +15,12 @@ pub struct Texture {
 
 impl Texture {
     pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, renderable: bool) -> Self {
-        let inner = create_texture(device, size, &format, renderable);
-        let view = inner.create_default_view();
+        let texture = create_texture(device, size, &format, renderable);
+        let view = texture.create_default_view();
         let sampler = create_sampler(device, filter_mode);
+        let inner = InnerT { texture, view, sampler, size, format };
 
-        Self { inner, view, sampler, size, format }
+        Self { inner: rc::Rc::new(inner) }
     }
 
     pub fn set_data(&self, device: &wgpu::Device, data: &[u8]) -> wgpu::CommandBuffer {
@@ -22,7 +28,7 @@ impl Texture {
         let mut encoder = create_command_encoder(device);
 
         let buffer_copy = buffer_copy_view(&buffer, self.size);
-        let texture_copy = texture_copy_view(&self.inner);
+        let texture_copy = texture_copy_view(&self.texture);
 
         encoder.copy_buffer_to_texture(buffer_copy, texture_copy, extent(self.size));
         encoder.finish()
@@ -125,4 +131,12 @@ fn texture_binding(id: u32, texture_view: &wgpu::TextureView) -> wgpu::Binding {
 
 fn sampler_binding(id: u32, sampler: &wgpu::Sampler) -> wgpu::Binding {
     wgpu::Binding { binding: id, resource: wgpu::BindingResource::Sampler(sampler) }
+}
+
+impl ops::Deref for Texture {
+    type Target = InnerT;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
