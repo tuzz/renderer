@@ -1,4 +1,3 @@
-mod aspect_ratio;
 mod attribute;
 mod blend_mode;
 mod buffer;
@@ -14,9 +13,9 @@ mod render_pass;
 mod target;
 mod texture;
 mod uniform;
+mod viewport;
 mod visibility;
 
-pub use aspect_ratio::*;
 pub use attribute::*;
 pub use blend_mode::*;
 pub use buffer::*;
@@ -32,6 +31,7 @@ pub use render_pass::*;
 pub use target::*;
 pub use texture::*;
 pub use uniform::*;
+pub use viewport::*;
 pub use visibility::*;
 
 #[cfg(feature="shader_compilation")] mod compiler;

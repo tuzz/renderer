@@ -32,9 +32,9 @@ impl Renderer {
         texture.resize(&self.device, new_size);
     }
 
-    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, aspect: Option<crate::AspectRatio>, count: (u32, u32)) {
+    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
         match &pipeline.target {
-            crate::Target::Screen => self.render_to_screen(pipeline, clear_color, aspect, count),
+            crate::Target::Screen => self.render_to_screen(pipeline, clear_color, viewport, count),
             crate::Target::Texture(texture) => self.render_to_texture(texture, pipeline, clear_color, count),
         }
     }
@@ -42,13 +42,9 @@ impl Renderer {
     // You can render to a different target than was specified when setting up
     // the pipeline but it might crash(?) if the texture format is different.
 
-    pub fn render_to_screen(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, mut aspect: Option<crate::AspectRatio>, count: (u32, u32)) {
-        if let Some(aspect_ratio) = &mut aspect {
-            aspect_ratio.window_size = Some(self.window_size);
-        }
-
+    pub fn render_to_screen(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
         let frame = self.swap_chain.get_next_texture().unwrap();
-        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, aspect, count);
+        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, viewport, count);
 
         self.queue.submit(&[commands]);
     }
@@ -181,8 +177,8 @@ impl Renderer {
         crate::ClearColor::new(red, green, blue, alpha)
     }
 
-    pub fn aspect_ratio(&self, width: f32, height: f32) -> crate::AspectRatio {
-        crate::AspectRatio::new(width, height)
+    pub fn viewport(&self, aspect_x: f32, aspect_y: f32) -> crate::Viewport {
+        crate::Viewport::new(aspect_x, aspect_y, self.window_size.width as f32, self.window_size.height as f32)
     }
 }
 

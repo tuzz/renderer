@@ -1,10 +1,10 @@
 pub struct RenderPass;
 
 type Clear = Option<crate::ClearColor>;
-type Aspect = Option<crate::AspectRatio>;
+type View<'a> = Option<&'a crate::Viewport>;
 
 impl RenderPass {
-    pub fn render(device: &wgpu::Device, target: &wgpu::TextureView, pipeline: &crate::Pipeline, clear: Clear, aspect: Aspect, count: (u32, u32)) -> wgpu::CommandBuffer {
+    pub fn render(device: &wgpu::Device, target: &wgpu::TextureView, pipeline: &crate::Pipeline, clear: Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
         pipeline.recreate_on_buffer_or_texture_resize(device);
 
         let color_attachments = color_attachments(target, clear);
@@ -22,8 +22,8 @@ impl RenderPass {
             render_pass.set_vertex_buffer(slot as u32, &attribute.buffer, 0, 0);
         }
 
-        if let Some(aspect_ratio) = aspect {
-            set_viewport(&mut render_pass, aspect_ratio);
+        if let Some(v) = viewport {
+            render_pass.set_viewport(v.margin_x, v.margin_y, v.width, v.height, 0., 1.);
         }
 
         render_pass.draw(0..vertices_per_instance, 0..instance_count);
@@ -61,26 +61,4 @@ fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     let descriptor = wgpu::CommandEncoderDescriptor { label: None };
 
     device.create_command_encoder(&descriptor)
-}
-
-fn set_viewport(render_pass: &mut wgpu::RenderPass, aspect: crate::AspectRatio) {
-    let window = aspect.window_size.unwrap();
-
-    let current_aspect = window.width as f32 / window.height as f32;
-    let desired_aspect = aspect.width as f32 / aspect.height as f32;
-
-    let mut width = window.width as f32;
-    let mut height = window.height as f32;
-    let mut margin_x = 0.;
-    let mut margin_y = 0.;
-
-    if current_aspect > desired_aspect {
-        width = height * desired_aspect;
-        margin_x = (window.width as f32 - width) / 2.;
-    } else {
-        height = width / desired_aspect;
-        margin_y = (window.height as f32 - height) / 2.;
-    }
-
-    render_pass.set_viewport(margin_x, margin_y, width, height, 0., 1.);
 }
