@@ -1,8 +1,8 @@
-use std::{mem, ops, rc};
+use std::{cell, mem, ops, rc};
 
 #[derive(Clone)]
 pub struct Texture {
-    pub inner: rc::Rc<InnerT>,
+    pub inner: rc::Rc<cell::RefCell<InnerT>>,
 }
 
 pub struct InnerT {
@@ -22,18 +22,19 @@ impl Texture {
         let sampler = create_sampler(device, filter_mode);
         let inner = InnerT { texture, view, sampler, size, format, renderable, generation: 0 };
 
-        Self { inner: rc::Rc::new(inner) }
+        Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, new_size: (u32, u32)) {
         if self.size == new_size { return; }
 
-        self.size = new_size;
-        self.texture = create_texture(device, self.size, &self.format, self.renderable);
-        self.view = self.texture.create_default_view();
+        let mut inner = self.inner.borrow_mut();
+        inner.size = new_size;
+        inner.texture = create_texture(device, inner.size, &inner.format, inner.renderable);
+        inner.view = inner.texture.create_default_view();
 
         // Use generational indexing so pipelines know when they need to be recreated.
-        self.generation += 1;
+        inner.generation += 1;
     }
 
     pub fn set_data(&self, device: &wgpu::Device, data: &[u8]) -> wgpu::CommandBuffer {
@@ -150,12 +151,6 @@ impl ops::Deref for Texture {
     type Target = InnerT;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl ops::DerefMut for Texture {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        rc::Rc::get_mut(&mut self.inner).unwrap()
+        unsafe { &self.inner.try_borrow_unguarded().unwrap() }
     }
 }
