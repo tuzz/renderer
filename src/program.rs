@@ -7,7 +7,7 @@ pub struct Program {
     pub instances: Instances,
     pub uniforms: Uniforms,
     pub textures: Textures,
-    pub generations: Vec<u32>,
+    pub seen_generations: Vec<u32>,
 }
 
 pub type Attributes = Vec<crate::Attribute>;
@@ -17,11 +17,24 @@ pub type Textures = Vec<(crate::Texture, crate::Visibility)>;
 
 impl Program {
     pub fn new(device: &wgpu::Device, vert: &[u8], frag: &[u8], attributes: Attributes, instances: Instances, uniforms: Uniforms, textures: Textures) -> Self {
-        let vertex_shader = create_shader_module(device, vert);
-        let fragment_shader = create_shader_module(device, frag);
-        let generations = textures.iter().map(|(t, _)| t.generation).collect();
+        let mut program = Self {
+            vertex_shader: create_shader_module(device, vert),
+            fragment_shader: create_shader_module(device, frag),
+            attributes, instances, uniforms, textures,
+            seen_generations: vec![],
+        };
 
-        Self { vertex_shader, fragment_shader, attributes, instances, uniforms, textures, generations }
+        program.seen_generations = program.latest_generations().collect();
+        program
+    }
+
+    pub fn latest_generations(&self) -> impl Iterator<Item=u32> + '_ {
+        let g1 = self.attributes.iter().map(|a| a.buffer.generation());
+        let g2 = self.instances.iter().map(|i| i.buffer.generation());
+        let g3 = self.uniforms.iter().map(|(u, _)| u.buffer.generation());
+        let g4 = self.textures.iter().map(|(t, _)| t.generation);
+
+        g1.chain(g2).chain(g3).chain(g4)
     }
 }
 

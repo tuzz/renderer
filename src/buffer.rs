@@ -8,14 +8,15 @@ pub struct InnerB {
     pub buffer: wgpu::Buffer,
     pub usage: wgpu::BufferUsage,
     pub size: usize,
+    pub generation: u32,
 }
 
-const INITIAL_SIZE: usize = mem::size_of::<f32>() * 1024;
+const INITIAL_SIZE: usize = mem::size_of::<f32>() * 16; // Enough for a mat4 uniform.
 
 impl Buffer {
     pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsage) -> Self {
         let buffer = create_buffer(device, usage);
-        let inner = InnerB { buffer, usage, size: INITIAL_SIZE };
+        let inner = InnerB { buffer, usage, size: INITIAL_SIZE, generation: 0 };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -32,13 +33,20 @@ impl Buffer {
         if data_size > inner.size {
             inner.buffer = staging;
             inner.usage = usage;
+            inner.size = data_size;
+            inner.generation += 1;
+
             None
         } else {
             let mut encoder = create_command_encoder(device);
-
             encoder.copy_buffer_to_buffer(&staging, 0, &inner.buffer, 0, data_size as u64);
+
             Some(encoder.finish())
         }
+    }
+
+    pub fn generation(&self) -> u32 {
+        self.inner.borrow().generation
     }
 }
 

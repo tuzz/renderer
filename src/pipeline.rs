@@ -22,11 +22,12 @@ impl Pipeline {
         Self { inner: cell::RefCell::new(inner) }
     }
 
-    pub fn recreate_on_texture_resize(&self, device: &wgpu::Device) {
-        let actual = self.program.textures.iter().map(|(t, _)| t.generation);
-        let expected = &self.program.generations;
+    pub fn recreate_on_buffer_or_texture_resize(&self, device: &wgpu::Device) {
+        let actual = self.program.latest_generations();
+        let expected = &self.program.seen_generations;
 
-        if actual.clone().zip(expected).all(|(g1, g2)| g1 == *g2) { return; }
+        if actual.zip(expected).all(|(g1, g2)| g1 == *g2) { return; }
+        let actual = self.program.latest_generations().collect();
 
         let (bind_group, layout) = create_bind_group(device, &self.program);
         let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layout, &self.target);
@@ -34,7 +35,7 @@ impl Pipeline {
         let mut inner = self.inner.borrow_mut();
         inner.bind_group = bind_group;
         inner.pipeline = pipeline;
-        inner.program.generations = actual.collect();
+        inner.program.seen_generations = actual;
     }
 }
 
