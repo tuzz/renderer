@@ -21,9 +21,13 @@ impl Renderer {
         Self { window_size, surface, adapter, device, queue, swap_chain }
     }
 
-    pub fn resize(&mut self, new_size: &dpi::PhysicalSize<u32>) {
+    pub fn resize_swap_chain(&mut self, new_size: &dpi::PhysicalSize<u32>) {
         self.window_size = *new_size;
         self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
+    }
+
+    pub fn resize_texture(&self, texture: &mut crate::Texture, new_size: (u32, u32)) {
+        texture.resize(&self.device, new_size);
     }
 
     pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, aspect: Option<crate::AspectRatio>, count: (u32, u32)) {

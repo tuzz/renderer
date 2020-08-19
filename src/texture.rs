@@ -26,6 +26,8 @@ impl Texture {
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, new_size: (u32, u32)) {
+        if self.size == new_size { return; }
+
         self.size = new_size;
         self.texture = create_texture(device, self.size, &self.format, self.renderable);
         self.view = self.texture.create_default_view();

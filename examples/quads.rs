@@ -49,11 +49,11 @@ fn main() {
         a_position,                                         // attribute 0
         a_tex_coord,                                        // attribute 1
     ], vec![
-        i_offset,                                           // set 0
+        i_offset,                                           // binding 0
     ], vec![
         // no uniforms
     ], vec![
-        (t_texture, renderer.visible_to_fragment_shader()), // set 1
+        (t_texture, renderer.visible_to_fragment_shader()), // binding 1
     ]);
 
     // We've already pre-multiplied the rgb channels by alpha in our texture (below).
@@ -106,10 +106,10 @@ fn main() {
             },
             event::Event::WindowEvent { event, .. } => match event {
                 event::WindowEvent::Resized(size) => {
-                    renderer.resize(&size);
+                    renderer.resize_swap_chain(&size);
                 },
                 event::WindowEvent::ScaleFactorChanged { new_inner_size: size, .. } => {
-                    renderer.resize(size);
+                    renderer.resize_swap_chain(size);
                 }
                 event::WindowEvent::CloseRequested => {
                     *control_flow = event_loop::ControlFlow::Exit;
