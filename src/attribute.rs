@@ -7,8 +7,6 @@ pub struct Attribute {
     pub size: u32,
 }
 
-const INITAL_BUFFER_SIZE: usize = mem::size_of::<f32>() * 1024;
-
 impl Attribute {
     pub fn new(device: &wgpu::Device, location: usize, size: u32) -> Self {
         let usage = wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST;
