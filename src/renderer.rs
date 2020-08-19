@@ -22,6 +22,8 @@ impl Renderer {
     }
 
     pub fn resize_swap_chain(&mut self, new_size: &dpi::PhysicalSize<u32>) {
+        if new_size.width == 0 || new_size.height == 0 { return; }
+
         self.window_size = *new_size;
         self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
     }

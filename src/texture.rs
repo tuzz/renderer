@@ -27,6 +27,7 @@ impl Texture {
 
     pub fn resize(&mut self, device: &wgpu::Device, new_size: (u32, u32)) {
         if self.size == new_size { return; }
+        if new_size.0 == 0 || new_size.1 == 0 { return; }
 
         let mut inner = self.inner.borrow_mut();
         inner.size = new_size;
