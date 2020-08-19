@@ -224,5 +224,5 @@ fn uniform_index(index: usize, program: &crate::Program) -> usize {
 }
 
 fn texture_index(index: usize, program: &crate::Program) -> usize {
-    index - program.instances.len() - program.uniforms.len()
+    (index - program.instances.len() - program.uniforms.len()) / 2
 }
