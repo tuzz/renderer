@@ -84,7 +84,7 @@ impl Renderer {
         }
     }
 
-    pub fn set_texture(&self, pipeline: &crate::Pipeline, index: usize, data: &[u8]) {
+    pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index: usize, data: &[T]) {
         let relative_index = texture_index(index, &pipeline.program);
 
         let (texture, _) = &pipeline.program.textures[relative_index];

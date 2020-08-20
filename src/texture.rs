@@ -1,4 +1,4 @@
-use std::{cell, mem, ops, rc};
+use std::{cell, ops, rc};
 
 #[derive(Clone)]
 pub struct Texture {
@@ -33,18 +33,17 @@ impl Texture {
         inner.size = new_size;
         inner.texture = create_texture(device, inner.size, &inner.format, inner.renderable);
         inner.view = inner.texture.create_default_view();
-
-        // Use generational indexing so pipelines know when they need to be recreated.
         inner.generation += 1;
     }
 
-    pub fn set_data(&self, device: &wgpu::Device, data: &[u8]) -> wgpu::CommandBuffer {
-        let buffer = device.create_buffer_with_data(data, wgpu::BufferUsage::COPY_SRC);
-        let mut encoder = create_command_encoder(device);
+    pub fn set_data<T: bytemuck::Pod>(&self, device: &wgpu::Device, data: &[T]) -> wgpu::CommandBuffer {
+        let bytes = bytemuck::cast_slice(data);
+        let buffer = device.create_buffer_with_data(bytes, wgpu::BufferUsage::COPY_SRC);
 
-        let buffer_copy = buffer_copy_view(&buffer, self.size);
+        let buffer_copy = buffer_copy_view(&buffer, &self.format, self.size);
         let texture_copy = texture_copy_view(&self.texture);
 
+        let mut encoder = create_command_encoder(device);
         encoder.copy_buffer_to_texture(buffer_copy, texture_copy, extent(self.size));
         encoder.finish()
     }
@@ -106,11 +105,11 @@ fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
 }
 
-fn buffer_copy_view(buffer: &wgpu::Buffer, (width, height): (u32, u32)) -> wgpu::BufferCopyView {
+fn buffer_copy_view<'a>(buffer: &'a wgpu::Buffer, format: &crate::Format, (width, height): (u32, u32)) -> wgpu::BufferCopyView<'a> {
     wgpu::BufferCopyView {
         buffer: buffer,
         offset: 0,
-        bytes_per_row: mem::size_of::<f32>() as u32 * width,
+        bytes_per_row: format.bytes_per_texel() * width,
         rows_per_image: height,
     }
 }

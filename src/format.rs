@@ -22,4 +22,21 @@ impl Format {
             Self::RgbaF16 | Self::RgbaF32 => wgpu::TextureComponentType::Float,
         }
     }
+
+    pub fn channels(&self) -> u32 {
+        4
+    }
+
+    pub fn bytes_per_channel(&self) -> u32 {
+        match self {
+            Self::BgraU8 => 1,
+            Self::RgbaU8 => 1,
+            Self::RgbaF16 => 2,
+            Self::RgbaF32 => 4,
+        }
+    }
+
+    pub fn bytes_per_texel(&self) -> u32 {
+        self.channels() * self.bytes_per_channel()
+    }
 }

@@ -1,5 +1,3 @@
-use std::mem;
-
 pub struct Attribute {
     pub buffer: crate::Buffer,
     pub descriptor: wgpu::VertexAttributeDescriptor,
