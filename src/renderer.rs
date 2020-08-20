@@ -206,9 +206,9 @@ fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surfa
     let descriptor = wgpu::SwapChainDescriptor {
         width: window_size.width,
         height: window_size.height,
-        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT, // Writes to the screen
-        format: format.texture_format(),              // Guaranteed to be supported
-        present_mode: wgpu::PresentMode::Fifo,        // Enable vsync
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        format: format.texture_format(),
+        present_mode: wgpu::PresentMode::Fifo,
     };
 
     device.create_swap_chain(surface, &descriptor)

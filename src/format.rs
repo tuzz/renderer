@@ -9,8 +9,8 @@ pub enum Format {
 impl Format {
     pub fn texture_format(&self) -> wgpu::TextureFormat {
         match self {
-            Self::BgraU8 => wgpu::TextureFormat::Bgra8UnormSrgb,
-            Self::RgbaU8 => wgpu::TextureFormat::Rgba8UnormSrgb,
+            Self::BgraU8 => wgpu::TextureFormat::Bgra8Unorm,
+            Self::RgbaU8 => wgpu::TextureFormat::Rgba8Unorm,
             Self::RgbaF16 => wgpu::TextureFormat::Rgba16Float,
             Self::RgbaF32 => wgpu::TextureFormat::Rgba32Float,
         }
