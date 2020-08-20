@@ -12,6 +12,7 @@ pub struct InnerB {
 }
 
 const INITIAL_SIZE: usize = mem::size_of::<f32>() * 16; // Enough for a mat4 uniform.
+const HEADROOM: usize = mem::size_of::<f32>() * 256;
 
 impl Buffer {
     pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsage) -> Self {
@@ -23,23 +24,22 @@ impl Buffer {
 
     pub fn set_data(&self, device: &wgpu::Device, data: &[f32]) -> Option<wgpu::CommandBuffer> {
         let mut inner = self.inner.borrow_mut();
-
         let bytes = bytemuck::cast_slice(data);
-        let usage = inner.usage | wgpu::BufferUsage::COPY_SRC;
-        let staging = device.create_buffer_with_data(bytes, usage);
 
-        let data_size = mem::size_of::<f32>() * data.len();
+        if bytes.len() > inner.size {
+            let (buffer, size) = create_buffer_with_headroom(device, inner.usage, bytes);
 
-        if data_size > inner.size {
-            inner.buffer = staging;
-            inner.usage = usage;
-            inner.size = data_size;
+            inner.buffer = buffer;
+            inner.usage |= wgpu::BufferUsage::COPY_SRC;
+            inner.size = size;
             inner.generation += 1;
 
             None
         } else {
+            let staging = device.create_buffer_with_data(bytes, wgpu::BufferUsage::COPY_SRC);
+
             let mut encoder = create_command_encoder(device);
-            encoder.copy_buffer_to_buffer(&staging, 0, &inner.buffer, 0, data_size as u64);
+            encoder.copy_buffer_to_buffer(&staging, 0, &inner.buffer, 0, bytes.len() as u64);
 
             Some(encoder.finish())
         }
@@ -54,6 +54,18 @@ fn create_buffer(device: &wgpu::Device, usage: wgpu::BufferUsage) -> wgpu::Buffe
     let descriptor = wgpu::BufferDescriptor { label: None, size: INITIAL_SIZE as u64, usage };
 
     device.create_buffer(&descriptor)
+}
+
+fn create_buffer_with_headroom(device: &wgpu::Device, usage: wgpu::BufferUsage, bytes: &[u8]) -> (wgpu::Buffer, usize) {
+    let buffer_size = (bytes.len() + HEADROOM).next_power_of_two();
+
+    let descriptor = wgpu::BufferDescriptor { label: None, size: buffer_size as u64, usage };
+    let mapped = device.create_buffer_mapped(&descriptor);
+
+    mapped.data[0..bytes.len()].copy_from_slice(bytes);
+    let buffer = mapped.finish();
+
+    (buffer, buffer_size)
 }
 
 fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
