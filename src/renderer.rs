@@ -1,3 +1,4 @@
+use std::cell;
 use futures::executor;
 use winit::{dpi, window};
 
@@ -8,6 +9,7 @@ pub struct Renderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub swap_chain: wgpu::SwapChain,
+    pub commands: cell::RefCell<Vec<wgpu::CommandBuffer>>,
 }
 
 impl Renderer {
@@ -17,8 +19,9 @@ impl Renderer {
         let adapter = get_adapter(&surface);
         let (device, queue) = get_device(&adapter);
         let swap_chain = create_swap_chain(&window_size, &surface, &device);
+        let commands = cell::RefCell::new(vec![]);
 
-        Self { window_size, surface, adapter, device, queue, swap_chain }
+        Self { window_size, surface, adapter, device, queue, swap_chain, commands }
     }
 
     pub fn resize_swap_chain(&mut self, new_size: &dpi::PhysicalSize<u32>) {
@@ -40,27 +43,33 @@ impl Renderer {
     }
 
     // You can render to a different target than was specified when setting up
-    // the pipeline but it might crash(?) if the texture format is different.
+    // the pipeline but it will crash if the texture format is different.
 
     pub fn render_to_screen(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
         let frame = self.swap_chain.get_next_texture().unwrap();
-        let commands = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, viewport, count);
+        let cbuffer = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, viewport, count);
 
-        self.queue.submit(&[commands]);
+        self.commands.borrow_mut().push(cbuffer);
+        self.flush_commands();
     }
 
-    pub fn render_to_texture(&mut self, texture: &crate::Texture, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
-        let commands = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, None, count);
+    pub fn render_to_texture(&self, texture: &crate::Texture, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
+        let cbuffer = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, None, count);
 
-        self.queue.submit(&[commands]);
+        self.commands.borrow_mut().push(cbuffer);
+    }
+
+    pub fn flush_commands(&self) {
+        self.queue.submit(&self.commands.borrow());
+        self.commands.borrow_mut().clear();
     }
 
     pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
         let attribute = pipeline.program.attributes.iter().find(|a| a.location == location).unwrap();
         let option = attribute.buffer.set_data(&self.device, data);
 
-        if let Some(commands) = option {
-            self.queue.submit(&[commands]);
+        if let Some(cbuffer) = option {
+            self.commands.borrow_mut().push(cbuffer);
         }
     }
 
@@ -68,8 +77,8 @@ impl Renderer {
         let instanced = &pipeline.program.instances[index];
         let option = instanced.buffer.set_data(&self.device, data);
 
-        if let Some(commands) = option {
-            self.queue.submit(&[commands]);
+        if let Some(cbuffer) = option {
+            self.commands.borrow_mut().push(cbuffer);
         }
     }
 
@@ -79,8 +88,8 @@ impl Renderer {
         let (uniform, _) = &pipeline.program.uniforms[relative_index];
         let option = uniform.buffer.set_data(&self.device, data);
 
-        if let Some(commands) = option {
-            self.queue.submit(&[commands]);
+        if let Some(cbuffer) = option {
+            self.commands.borrow_mut().push(cbuffer);
         }
     }
 
@@ -88,9 +97,9 @@ impl Renderer {
         let relative_index = texture_index(index, &pipeline.program);
 
         let (texture, _) = &pipeline.program.textures[relative_index];
-        let commands = texture.set_data(&self.device, data);
+        let cbuffer = texture.set_data(&self.device, data);
 
-        self.queue.submit(&[commands]);
+        self.commands.borrow_mut().push(cbuffer);
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> crate::Pipeline {
