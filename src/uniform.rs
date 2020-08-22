@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Uniform {
     pub buffer: crate::Buffer,
     pub size: u32,

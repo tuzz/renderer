@@ -1,7 +1,8 @@
-use std::{cell, mem, ops};
+use std::{cell, mem, ops, rc};
 
+#[derive(Clone)]
 pub struct Buffer {
-    pub inner: cell::RefCell<InnerB>,
+    pub inner: rc::Rc<cell::RefCell<InnerB>>,
 }
 
 pub struct InnerB {
@@ -19,7 +20,7 @@ impl Buffer {
         let buffer = create_buffer(device, usage);
         let inner = InnerB { buffer, usage, size: INITIAL_SIZE, generation: 0 };
 
-        Self { inner: cell::RefCell::new(inner) }
+        Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
     pub fn set_data(&self, device: &wgpu::Device, data: &[f32]) -> Option<wgpu::CommandBuffer> {

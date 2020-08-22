@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Instanced {
     pub buffer: crate::Buffer,
     pub size: u32,
