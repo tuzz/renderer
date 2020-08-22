@@ -13,7 +13,7 @@ fn main() {
     // Create a winit window and a renderer for that window.
     let event_loop = event_loop::EventLoop::new();
     let window = window::WindowBuilder::new().build(&event_loop).unwrap();
-    let mut renderer = renderer::Renderer::new(&window);
+    let renderer = renderer::Renderer::new(&window);
 
     // Read the compiled vertex and fragment shader from disk. When making
     // changes you need to run the example twice (once first to compile).
@@ -98,8 +98,9 @@ fn main() {
                 // Set the window's viewport to a square, surrounded by black borders.
                 let viewport = renderer.viewport(1., 1.); // e.g. (16., 9.)
 
-                // Render two instances, each comprised for four vertices.
+                // Render two instances, each comprised of four vertices.
                 renderer.render(&pipeline, Some(clear_color), Some(&viewport), (2, 4));
+                renderer.finish_frame();
             },
             event::Event::MainEventsCleared => {
                 window.request_redraw();

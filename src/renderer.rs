@@ -1,15 +1,20 @@
-use std::cell;
+use std::{cell, ops};
 use futures::executor;
 use winit::{dpi, window};
 
 pub struct Renderer {
+    pub inner: cell::RefCell<InnerR>,
+}
+
+pub struct InnerR {
     pub window_size: dpi::PhysicalSize<u32>,
     pub surface: wgpu::Surface,
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub swap_chain: wgpu::SwapChain,
-    pub commands: cell::RefCell<Vec<wgpu::CommandBuffer>>,
+    pub frame: Option<wgpu::SwapChainOutput>,
+    pub commands: Vec<wgpu::CommandBuffer>,
 }
 
 impl Renderer {
@@ -18,24 +23,28 @@ impl Renderer {
         let surface = wgpu::Surface::create(window);
         let adapter = get_adapter(&surface);
         let (device, queue) = get_device(&adapter);
-        let swap_chain = create_swap_chain(&window_size, &surface, &device);
-        let commands = cell::RefCell::new(vec![]);
+        let mut swap_chain = create_swap_chain(&window_size, &surface, &device);
+        let frame = Some(swap_chain.get_next_texture().unwrap());
+        let commands = vec![];
+        let inner = InnerR { window_size, surface, adapter, device, queue, swap_chain, frame, commands };
 
-        Self { window_size, surface, adapter, device, queue, swap_chain, commands }
+        Self { inner: cell::RefCell::new(inner) }
     }
 
-    pub fn resize_swap_chain(&mut self, new_size: &dpi::PhysicalSize<u32>) {
+    pub fn resize_swap_chain(&self, new_size: &dpi::PhysicalSize<u32>) {
         if new_size.width == 0 || new_size.height == 0 { return; }
 
-        self.window_size = *new_size;
-        self.swap_chain = create_swap_chain(&new_size, &self.surface, &self.device);
+        let mut inner = self.inner.borrow_mut();
+
+        inner.window_size = *new_size;
+        inner.swap_chain = create_swap_chain(&new_size, &inner.surface, &inner.device);
     }
 
     pub fn resize_texture(&self, texture: &mut crate::Texture, new_size: (u32, u32)) {
         texture.resize(&self.device, new_size);
     }
 
-    pub fn render(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
+    pub fn render(&self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
         match &pipeline.target {
             crate::Target::Screen => self.render_to_screen(pipeline, clear_color, viewport, count),
             crate::Target::Texture(texture) => self.render_to_texture(texture, pipeline, clear_color, count),
@@ -45,23 +54,36 @@ impl Renderer {
     // You can render to a different target than was specified when setting up
     // the pipeline but it will crash if the texture format is different.
 
-    pub fn render_to_screen(&mut self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
-        let frame = self.swap_chain.get_next_texture().unwrap();
+    pub fn render_to_screen(&self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
+        self.start_frame();
+
+        let frame = self.frame.as_ref().unwrap();
         let cbuffer = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, viewport, count);
 
-        self.commands.borrow_mut().push(cbuffer);
-        self.flush_commands();
+        self.inner.borrow_mut().commands.push(cbuffer);
     }
 
     pub fn render_to_texture(&self, texture: &crate::Texture, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
         let cbuffer = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, None, count);
 
-        self.commands.borrow_mut().push(cbuffer);
+        self.inner.borrow_mut().commands.push(cbuffer);
+    }
+
+    pub fn start_frame(&self) {
+        if self.frame.is_some() { return; }
+
+        let mut inner = self.inner.borrow_mut();
+        inner.frame = Some(inner.swap_chain.get_next_texture().unwrap());
+    }
+
+    pub fn finish_frame(&self) {
+        self.flush_commands();
+        self.inner.borrow_mut().frame = None;
     }
 
     pub fn flush_commands(&self) {
-        self.queue.submit(&self.commands.borrow());
-        self.commands.borrow_mut().clear();
+        self.queue.submit(&self.commands);
+        self.inner.borrow_mut().commands.clear();
     }
 
     pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
@@ -69,7 +91,7 @@ impl Renderer {
         let option = attribute.buffer.set_data(&self.device, data);
 
         if let Some(cbuffer) = option {
-            self.commands.borrow_mut().push(cbuffer);
+            self.inner.borrow_mut().commands.push(cbuffer);
         }
     }
 
@@ -78,7 +100,7 @@ impl Renderer {
         let option = instanced.buffer.set_data(&self.device, data);
 
         if let Some(cbuffer) = option {
-            self.commands.borrow_mut().push(cbuffer);
+            self.inner.borrow_mut().commands.push(cbuffer);
         }
     }
 
@@ -89,7 +111,7 @@ impl Renderer {
         let option = uniform.buffer.set_data(&self.device, data);
 
         if let Some(cbuffer) = option {
-            self.commands.borrow_mut().push(cbuffer);
+            self.inner.borrow_mut().commands.push(cbuffer);
         }
     }
 
@@ -99,7 +121,7 @@ impl Renderer {
         let (texture, _) = &pipeline.program.textures[relative_index];
         let cbuffer = texture.set_data(&self.device, data);
 
-        self.commands.borrow_mut().push(cbuffer);
+        self.inner.borrow_mut().commands.push(cbuffer);
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> crate::Pipeline {
@@ -230,4 +252,12 @@ fn uniform_index(index: usize, program: &crate::Program) -> usize {
 
 fn texture_index(index: usize, program: &crate::Program) -> usize {
     (index - program.instances.len() - program.uniforms.len()) / 2
+}
+
+impl ops::Deref for Renderer {
+    type Target = InnerR;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { &self.inner.try_borrow_unguarded().unwrap() }
+    }
 }
