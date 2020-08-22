@@ -4,10 +4,10 @@ type Clear = Option<crate::ClearColor>;
 type View<'a> = Option<&'a crate::Viewport>;
 
 impl RenderPass {
-    pub fn render(device: &wgpu::Device, target: &wgpu::TextureView, pipeline: &crate::Pipeline, clear: Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
+    pub fn render(device: &wgpu::Device, targets: &[&wgpu::TextureView], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
         pipeline.recreate_on_buffer_or_texture_resize(device);
 
-        let color_attachments = color_attachments(target, clear);
+        let color_attachments = color_attachments(targets, clear);
         let descriptor = render_pass_descriptor(&color_attachments);
         let attributes = &pipeline.program.attributes;
         let (instance_count, vertices_per_instance) = count;
@@ -33,24 +33,18 @@ impl RenderPass {
     }
 }
 
-fn color_attachments(target: &wgpu::TextureView, clear: Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor> {
-    if let Some(clear_color) = clear {
-        vec![wgpu::RenderPassColorAttachmentDescriptor {
-            attachment: target,
-            resolve_target: None,
-            load_op: wgpu::LoadOp::Clear,
-            store_op: wgpu::StoreOp::Store,
-            clear_color: clear_color.inner,
-        }]
-    } else {
-        vec![wgpu::RenderPassColorAttachmentDescriptor {
-            attachment: target,
-            resolve_target: None,
-            load_op: wgpu::LoadOp::Load,
-            store_op: wgpu::StoreOp::Store,
-            clear_color: wgpu::Color::TRANSPARENT,
-        }]
-    }
+fn color_attachments<'a>(targets: &'a [&wgpu::TextureView], clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
+    targets.iter().map(|t| color_attachment(t, clear)).collect()
+}
+
+fn color_attachment<'a>(target: &'a wgpu::TextureView, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
+    let attachment = target;
+    let resolve_target = None;
+    let load_op = match clear { Some(_) => wgpu::LoadOp::Clear, _ => wgpu::LoadOp::Load };
+    let store_op = wgpu::StoreOp::Store;
+    let clear_color = match clear { Some(c) => c.inner, _ => wgpu::Color::TRANSPARENT };
+
+    wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, load_op, store_op, clear_color }
 }
 
 fn render_pass_descriptor<'a>(color_attachments: &'a [wgpu::RenderPassColorAttachmentDescriptor]) -> wgpu::RenderPassDescriptor<'a, 'a> {

@@ -45,27 +45,24 @@ impl Renderer {
     }
 
     pub fn render(&self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
-        match &pipeline.target {
-            crate::Target::Screen => self.render_to_screen(pipeline, clear_color, viewport, count),
-            crate::Target::Texture(texture) => self.render_to_texture(texture, pipeline, clear_color, count),
-        }
+        self.render_to(&pipeline.targets, pipeline, clear_color, viewport, count);
     }
 
-    // You can render to a different target than was specified when setting up
-    // the pipeline but it will crash if the texture format is different.
+    // You can render to different targets than those specified when setting up
+    // the pipeline but it will crash if the texture formats are different.
 
-    pub fn render_to_screen(&self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
-        self.start_frame();
+    pub fn render_to(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
+        let targets = targets.iter().map(|target| {
+            match target {
+                crate::Target::Texture(texture) => &texture.view,
+                crate::Target::Screen => {
+                    self.start_frame();
+                    &self.frame.as_ref().unwrap().view
+                },
+            }
+        }).collect::<Vec<_>>();
 
-        let frame = self.frame.as_ref().unwrap();
-        let cbuffer = crate::RenderPass::render(&self.device, &frame.view, pipeline, clear_color, viewport, count);
-
-        self.inner.borrow_mut().commands.push(cbuffer);
-    }
-
-    pub fn render_to_texture(&self, texture: &crate::Texture, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, count: (u32, u32)) {
-        let cbuffer = crate::RenderPass::render(&self.device, &texture.view, pipeline, clear_color, None, count);
-
+        let cbuffer = crate::RenderPass::render(&self.device, &targets, pipeline, &clear_color, viewport, count);
         self.inner.borrow_mut().commands.push(cbuffer);
     }
 
@@ -124,8 +121,8 @@ impl Renderer {
         self.inner.borrow_mut().commands.push(cbuffer);
     }
 
-    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> crate::Pipeline {
-        crate::Pipeline::new(&self.device, program, blend_mode, primitive, target)
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> crate::Pipeline {
+        crate::Pipeline::new(&self.device, program, blend_mode, primitive, targets)
     }
 
     pub fn attribute(&self, location: usize, size: u32) -> crate::Attribute {

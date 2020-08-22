@@ -10,14 +10,14 @@ pub struct InnerP {
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
     pub primitive: crate::Primitive,
-    pub target: crate::Target,
+    pub targets: Vec<crate::Target>,
 }
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, target: crate::Target) -> Self {
+    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> Self {
         let (bind_group, layout) = create_bind_group(device, &program);
-        let pipeline = create_render_pipeline(device, &program, &blend_mode, &primitive, &layout, &target);
-        let inner = InnerP { pipeline, bind_group, program, blend_mode, primitive, target };
+        let pipeline = create_render_pipeline(device, &program, &blend_mode, &primitive, &layout, &targets);
+        let inner = InnerP { pipeline, bind_group, program, blend_mode, primitive, targets };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -30,7 +30,7 @@ impl Pipeline {
         let actual = self.program.latest_generations().collect();
 
         let (bind_group, layout) = create_bind_group(device, &self.program);
-        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layout, &self.target);
+        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layout, &self.targets);
 
         let mut inner = self.inner.borrow_mut();
         inner.bind_group = bind_group;
@@ -71,9 +71,10 @@ fn create_bind_group(device: &wgpu::Device, program: &crate::Program) -> (wgpu::
     (bind_group, layout)
 }
 
-fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layout: &wgpu::BindGroupLayout, target: &crate::Target) -> wgpu::RenderPipeline {
+fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layout: &wgpu::BindGroupLayout, targets: &[crate::Target]) -> wgpu::RenderPipeline {
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
+    let color_states = targets.iter().map(|t| blend_mode.descriptor(t.format())).collect::<Vec<_>>();
 
     let descriptor = wgpu::RenderPipelineDescriptor {
         layout: &create_layout(device, layout),
@@ -81,7 +82,7 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
         fragment_stage: Some(programmable_stage(&program.fragment_shader)),
         rasterization_state: None,
         primitive_topology: primitive.topology(),
-        color_states: &[blend_mode.descriptor(target.format())],
+        color_states: &color_states,
         depth_stencil_state: None,
         vertex_state: vertex_state(&vertex_buffers),
         sample_count: 1,

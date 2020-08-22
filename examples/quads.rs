@@ -66,7 +66,7 @@ fn main() {
     let target = renderer.screen_target();
 
     // Build the shader pipeline based on all the configuration above.
-    let pipeline = renderer.pipeline(program, blend_mode, primitive, target);
+    let pipeline = renderer.pipeline(program, blend_mode, primitive, vec![target]);
     let clear_color = renderer.clear_color(0., 0., 0., 0.);
 
     // Set all the data that won't change per render. Quads are made of four x, y coordinates.
