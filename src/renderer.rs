@@ -212,7 +212,7 @@ impl Renderer {
 
 fn get_adapter(surface: &wgpu::Surface) -> wgpu::Adapter {
     let options = wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::Default,
+        power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(surface)
     };
 
