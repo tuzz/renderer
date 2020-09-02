@@ -122,9 +122,7 @@ impl Renderer {
         let relative_index = texture_index(index, &pipeline.program);
 
         let (texture, _) = &pipeline.program.textures[relative_index];
-        let cbuffer = texture.set_data(&self.device, data);
-
-        self.inner.borrow_mut().commands.push(cbuffer);
+        texture.set_data(&self.queue, data);
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> crate::Pipeline {

@@ -37,17 +37,13 @@ impl Texture {
         inner.generation += 1;
     }
 
-    pub fn set_data<T: bytemuck::Pod>(&self, device: &wgpu::Device, data: &[T]) -> wgpu::CommandBuffer {
+    pub fn set_data<T: bytemuck::Pod>(&self, queue: &wgpu::Queue, data: &[T]) {
         let bytes = bytemuck::cast_slice(data);
-        let descriptor = wgpu::util::BufferInitDescriptor { label: None, contents: bytes, usage: wgpu::BufferUsage::COPY_SRC };
-        let buffer = device.create_buffer_init(&descriptor);
 
-        let buffer_copy = buffer_copy_view(&buffer, &self.format, self.size);
         let texture_copy = texture_copy_view(&self.texture);
+        let data_layout = texture_data_layout(&self.format, self.size);
 
-        let mut encoder = create_command_encoder(device);
-        encoder.copy_buffer_to_texture(buffer_copy, texture_copy, extent(self.size));
-        encoder.finish()
+        queue.write_texture(texture_copy, bytes, data_layout, extent(self.size));
     }
 
     pub fn texture_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
@@ -109,14 +105,12 @@ fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
 }
 
-fn buffer_copy_view<'a>(buffer: &'a wgpu::Buffer, format: &crate::Format, (width, height): (u32, u32)) -> wgpu::BufferCopyView<'a> {
-    let layout = wgpu::TextureDataLayout {
+fn texture_data_layout(format: &crate::Format, (width, height): (u32, u32)) -> wgpu::TextureDataLayout {
+    wgpu::TextureDataLayout {
         offset: 0,
         bytes_per_row: format.bytes_per_texel() * width,
         rows_per_image: height,
-    };
-
-    wgpu::BufferCopyView { buffer, layout }
+    }
 }
 
 fn texture_copy_view(texture: &wgpu::Texture) -> wgpu::TextureCopyView {
