@@ -8,25 +8,27 @@ pub struct Renderer {
 
 pub struct InnerR {
     pub window_size: dpi::PhysicalSize<u32>,
+    pub instance: wgpu::Instance,
     pub surface: wgpu::Surface,
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub swap_chain: wgpu::SwapChain,
-    pub frame: Option<wgpu::SwapChainOutput>,
+    pub frame: Option<wgpu::SwapChainFrame>,
     pub commands: Vec<wgpu::CommandBuffer>,
 }
 
 impl Renderer {
     pub fn new(window: &window::Window) -> Self {
         let window_size = window.inner_size();
-        let surface = wgpu::Surface::create(window);
-        let adapter = get_adapter(&surface);
+        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+        let surface = unsafe { instance.create_surface(window) };
+        let adapter = get_adapter(&instance, &surface);
         let (device, queue) = get_device(&adapter);
         let mut swap_chain = create_swap_chain(&window_size, &surface, &device);
-        let frame = Some(swap_chain.get_next_texture().unwrap());
+        let frame = Some(swap_chain.get_current_frame().unwrap());
         let commands = vec![];
-        let inner = InnerR { window_size, surface, adapter, device, queue, swap_chain, frame, commands };
+        let inner = InnerR { window_size, instance, surface, adapter, device, queue, swap_chain, frame, commands };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -57,7 +59,7 @@ impl Renderer {
                 crate::Target::Texture(texture) => &texture.view,
                 crate::Target::Screen => {
                     self.start_frame();
-                    &self.frame.as_ref().unwrap().view
+                    &self.frame.as_ref().unwrap().output.view
                 },
             }
         }).collect::<Vec<_>>();
@@ -70,7 +72,7 @@ impl Renderer {
         if self.frame.is_some() { return; }
 
         let mut inner = self.inner.borrow_mut();
-        inner.frame = Some(inner.swap_chain.get_next_texture().unwrap());
+        inner.frame = Some(inner.swap_chain.get_current_frame().unwrap());
     }
 
     pub fn finish_frame(&self) {
@@ -79,8 +81,7 @@ impl Renderer {
     }
 
     pub fn flush_commands(&self) {
-        self.queue.submit(&self.commands);
-        self.inner.borrow_mut().commands.clear();
+        self.queue.submit(self.inner.borrow_mut().commands.drain(..));
     }
 
     pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
@@ -129,12 +130,12 @@ impl Renderer {
         crate::Attribute::new(&self.device, location, size)
     }
 
-    pub fn instanced(&self, size: u32) -> crate::Instanced {
-        crate::Instanced::new(&self.device, size)
+    pub fn instanced(&self) -> crate::Instanced {
+        crate::Instanced::new(&self.device)
     }
 
-    pub fn uniform(&self, size: u32) -> crate::Uniform {
-        crate::Uniform::new(&self.device, size)
+    pub fn uniform(&self) -> crate::Uniform {
+        crate::Uniform::new(&self.device)
     }
 
     pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool) -> crate::Texture {
@@ -210,22 +211,22 @@ impl Renderer {
     }
 }
 
-fn get_adapter(surface: &wgpu::Surface) -> wgpu::Adapter {
+fn get_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adapter {
     let options = wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::HighPerformance,
         compatible_surface: Some(surface)
     };
 
-    let future = wgpu::Adapter::request(&options, wgpu::BackendBit::PRIMARY);
+    let future = instance.request_adapter(&options);
 
     executor::block_on(future).unwrap()
 }
 
 fn get_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
     let descriptor = wgpu::DeviceDescriptor::default();
-    let future = adapter.request_device(&descriptor);
+    let future = adapter.request_device(&descriptor, None);
 
-    executor::block_on(future)
+    executor::block_on(future).unwrap()
 }
 
 fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surface, device: &wgpu::Device) -> wgpu::SwapChain {

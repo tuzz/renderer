@@ -19,7 +19,7 @@ impl RenderPass {
         render_pass.set_bind_group(0, &pipeline.bind_group, &[]);
 
         for (slot, attribute) in attributes.iter().enumerate() {
-            render_pass.set_vertex_buffer(slot as u32, &attribute.buffer, 0, 0);
+            render_pass.set_vertex_buffer(slot as u32, attribute.buffer.slice(..));
         }
 
         if let Some(v) = viewport {
@@ -38,13 +38,14 @@ fn color_attachments<'a>(targets: &'a [&wgpu::TextureView], clear: &Clear) -> Ve
 }
 
 fn color_attachment<'a>(target: &'a wgpu::TextureView, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
+    let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
+    let store = true;
+    let ops = wgpu::Operations { load, store };
+
     let attachment = target;
     let resolve_target = None;
-    let load_op = match clear { Some(_) => wgpu::LoadOp::Clear, _ => wgpu::LoadOp::Load };
-    let store_op = wgpu::StoreOp::Store;
-    let clear_color = match clear { Some(c) => c.inner, _ => wgpu::Color::TRANSPARENT };
 
-    wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, load_op, store_op, clear_color }
+    wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, ops }
 }
 
 fn render_pass_descriptor<'a>(color_attachments: &'a [wgpu::RenderPassColorAttachmentDescriptor]) -> wgpu::RenderPassDescriptor<'a, 'a> {

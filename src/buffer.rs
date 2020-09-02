@@ -1,4 +1,5 @@
 use std::{cell, mem, ops, rc};
+use wgpu::util::DeviceExt;
 
 #[derive(Clone)]
 pub struct Buffer {
@@ -37,7 +38,8 @@ impl Buffer {
 
             None
         } else {
-            let staging = device.create_buffer_with_data(bytes, wgpu::BufferUsage::COPY_SRC);
+            let descriptor = wgpu::util::BufferInitDescriptor { label: None, contents: bytes, usage: wgpu::BufferUsage::COPY_SRC };
+            let staging = device.create_buffer_init(&descriptor);
 
             let mut encoder = create_command_encoder(device);
             encoder.copy_buffer_to_buffer(&staging, 0, &inner.buffer, 0, bytes.len() as u64);
@@ -52,7 +54,7 @@ impl Buffer {
 }
 
 fn create_buffer(device: &wgpu::Device, usage: wgpu::BufferUsage) -> wgpu::Buffer {
-    let descriptor = wgpu::BufferDescriptor { label: None, size: INITIAL_SIZE as u64, usage };
+    let descriptor = wgpu::BufferDescriptor { label: None, size: INITIAL_SIZE as u64, usage, mapped_at_creation: false };
 
     device.create_buffer(&descriptor)
 }
@@ -60,11 +62,11 @@ fn create_buffer(device: &wgpu::Device, usage: wgpu::BufferUsage) -> wgpu::Buffe
 fn create_buffer_with_headroom(device: &wgpu::Device, usage: wgpu::BufferUsage, bytes: &[u8]) -> (wgpu::Buffer, usize) {
     let buffer_size = (bytes.len() + HEADROOM).next_power_of_two();
 
-    let descriptor = wgpu::BufferDescriptor { label: None, size: buffer_size as u64, usage };
-    let mapped = device.create_buffer_mapped(&descriptor);
+    let descriptor = wgpu::BufferDescriptor { label: None, size: buffer_size as u64, usage, mapped_at_creation: true };
+    let buffer = device.create_buffer(&descriptor);
 
-    mapped.data[0..bytes.len()].copy_from_slice(bytes);
-    let buffer = mapped.finish();
+    buffer.slice(0..bytes.len() as u64).get_mapped_range_mut().copy_from_slice(bytes);
+    buffer.unmap();
 
     (buffer, buffer_size)
 }

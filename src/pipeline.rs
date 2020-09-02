@@ -40,32 +40,32 @@ impl Pipeline {
 }
 
 fn create_bind_group(device: &wgpu::Device, program: &crate::Program) -> (wgpu::BindGroup, wgpu::BindGroupLayout) {
-    let mut bindings = vec![];
+    let mut entries = vec![];
     let mut layouts = vec![];
     let mut binding_id = 0;
 
     for instanced in &program.instances {
         let (binding, layout) = instanced.binding(binding_id);
-        bindings.push(binding); layouts.push(layout); binding_id += 1;
+        entries.push(binding); layouts.push(layout); binding_id += 1;
     }
 
     for (uniform, visibility) in &program.uniforms {
         let (binding, layout) = uniform.binding(visibility, binding_id);
-        bindings.push(binding); layouts.push(layout); binding_id += 1;
+        entries.push(binding); layouts.push(layout); binding_id += 1;
     }
 
     for (texture, visibility) in &program.textures {
         let (binding, layout) = texture.texture_binding(visibility, binding_id);
-        bindings.push(binding); layouts.push(layout); binding_id += 1;
+        entries.push(binding); layouts.push(layout); binding_id += 1;
 
         let (binding, layout) = texture.sampler_binding(visibility, binding_id);
-        bindings.push(binding); layouts.push(layout); binding_id += 1;
+        entries.push(binding); layouts.push(layout); binding_id += 1;
     }
 
-    let descriptor = wgpu::BindGroupLayoutDescriptor { bindings: &layouts, label: None };
+    let descriptor = wgpu::BindGroupLayoutDescriptor { entries: &layouts, label: None };
     let layout = device.create_bind_group_layout(&descriptor);
 
-    let descriptor = wgpu::BindGroupDescriptor { layout: &layout, bindings: &bindings, label: None };
+    let descriptor = wgpu::BindGroupDescriptor { layout: &layout, entries: &entries, label: None };
     let bind_group = device.create_bind_group(&descriptor);
 
     (bind_group, layout)
@@ -75,9 +75,10 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
     let color_states = targets.iter().map(|t| blend_mode.descriptor(t.format())).collect::<Vec<_>>();
+    let layout = create_layout(device, layout);
 
     let descriptor = wgpu::RenderPipelineDescriptor {
-        layout: &create_layout(device, layout),
+        layout: Some(&layout),
         vertex_stage: programmable_stage(&program.vertex_shader),
         fragment_stage: Some(programmable_stage(&program.fragment_shader)),
         rasterization_state: None,
@@ -88,13 +89,14 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
         sample_count: 1,
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
+        label: None,
     };
 
     device.create_render_pipeline(&descriptor)
 }
 
 fn create_layout(device: &wgpu::Device, layout: &wgpu::BindGroupLayout) -> wgpu::PipelineLayout {
-    let descriptor = wgpu::PipelineLayoutDescriptor { bind_group_layouts: &[layout] };
+    let descriptor = wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[layout], push_constant_ranges: &[] };
 
     device.create_pipeline_layout(&descriptor)
 }

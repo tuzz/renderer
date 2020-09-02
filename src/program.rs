@@ -1,5 +1,3 @@
-use std::io;
-
 pub struct Program {
     pub vertex_shader: wgpu::ShaderModule,
     pub fragment_shader: wgpu::ShaderModule,
@@ -39,8 +37,7 @@ impl Program {
 }
 
 fn create_shader_module(device: &wgpu::Device, bytes: &[u8]) -> wgpu::ShaderModule {
-    let cursor = io::Cursor::new(bytes);
-    let spirv = wgpu::read_spirv(cursor).unwrap();
+    let spirv = wgpu::util::make_spirv(bytes);
 
-    device.create_shader_module(&spirv)
+    device.create_shader_module(spirv)
 }

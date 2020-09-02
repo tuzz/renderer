@@ -37,7 +37,7 @@ fn main() {
     let a_tex_coord = renderer.attribute(A_TEX_COORD, 2);
 
     // The x, y offset for all vertices of each instanced quad.
-    let i_offset = renderer.instanced(2);
+    let i_offset = renderer.instanced();
 
     // The texture binding for the fragment shader (renderable=false).
     let t_texture = renderer.texture(width, height, filter, format, false);
