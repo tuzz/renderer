@@ -1,3 +1,4 @@
+use crate::*;
 use std::{cell, ops};
 use futures::executor;
 use winit::{dpi, window};
@@ -93,7 +94,9 @@ impl Renderer {
         }
     }
 
-    pub fn set_instanced(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
+    pub fn set_instanced(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[f32]) {
+        let index = index_tuple.0 * BINDINGS_PER_GROUP + index_tuple.1;
+
         let instanced = &pipeline.program.instances[index];
         let option = instanced.buffer.set_data(&self.device, data);
 
@@ -102,7 +105,8 @@ impl Renderer {
         }
     }
 
-    pub fn set_uniform(&self, pipeline: &crate::Pipeline, index: usize, data: &[f32]) {
+    pub fn set_uniform(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[f32]) {
+        let index = index_tuple.0 * BINDINGS_PER_GROUP + index_tuple.1;
         let relative_index = uniform_index(index, &pipeline.program);
 
         let (uniform, _) = &pipeline.program.uniforms[relative_index];
@@ -113,7 +117,8 @@ impl Renderer {
         }
     }
 
-    pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index: usize, data: &[T]) {
+    pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[T]) {
+        let index = index_tuple.0 * BINDINGS_PER_GROUP + index_tuple.1;
         let relative_index = texture_index(index, &pipeline.program);
 
         let (texture, _) = &pipeline.program.textures[relative_index];

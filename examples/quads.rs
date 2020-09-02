@@ -3,8 +3,9 @@ use winit::{event, event_loop, window};
 const A_POSITION: usize = 0;
 const A_TEX_COORD: usize = 1;
 
-const I_OFFSET: usize = 0;
-const T_TEXTURE: usize = 1;
+const I_OFFSET: (usize, usize) = (0, 0);    // set 0, binding 0
+const T_TEXTURE: (usize, usize) = (0, 1);   // set 0, binding 1
+                                            // The next set begins after 4 bindings.
 
 fn main() {
     // Compile the vertex and fragment shaders for this example to SPIR-V.
@@ -49,11 +50,11 @@ fn main() {
         a_position,                                         // attribute 0
         a_tex_coord,                                        // attribute 1
     ], vec![
-        i_offset,                                           // binding 0
+        i_offset,                                           // set 0, binding 0
     ], vec![
         // no uniforms
     ], vec![
-        (t_texture, renderer.visible_to_fragment_shader()), // binding 1
+        (t_texture, renderer.visible_to_fragment_shader()), // set 0, binding 1
     ]);
 
     // We've already pre-multiplied the rgb channels by alpha in our texture (below).
