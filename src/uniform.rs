@@ -15,7 +15,7 @@ impl Uniform {
 
     pub fn binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
         let layout = uniform_binding_layout(id, visibility, &self.buffer);
-        let binding = uniform_binding(id, &self.buffer);
+        let binding = uniform_binding(id, &self.buffer, self.buffer.inner.borrow().size);
 
         (binding, layout)
     }
@@ -29,6 +29,8 @@ fn uniform_binding_layout(id: u32, visibility: &crate::Visibility, buffer: &crat
     wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
 }
 
-fn uniform_binding(id: u32, buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
-    wgpu::BindGroupEntry { binding: id, resource: wgpu::BindingResource::Buffer(buffer.slice(..)) }
+fn uniform_binding(id: u32, buffer: &wgpu::Buffer, size: usize) -> wgpu::BindGroupEntry {
+    let size = num::NonZeroU64::new(size as u64);
+
+    wgpu::BindGroupEntry { binding: id, resource: wgpu::BindingResource::Buffer { buffer, offset: 0, size } }
 }

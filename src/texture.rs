@@ -95,6 +95,7 @@ fn create_sampler(device: &wgpu::Device, filter_mode: crate::FilterMode) -> wgpu
         min_filter: filter_mode.to_wgpu(),
         mipmap_filter: wgpu::FilterMode::Nearest,
         anisotropy_clamp: None,
+        border_color: None,
         lod_min_clamp: 0.,
         lod_max_clamp: 0.,
         compare: None,

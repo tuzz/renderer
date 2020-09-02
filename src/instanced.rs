@@ -15,7 +15,7 @@ impl Instanced {
 
     pub fn binding(&self, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
         let layout = instanced_binding_layout(id, &self.buffer);
-        let binding = instanced_binding(id, &self.buffer);
+        let binding = instanced_binding(id, &self.buffer, self.buffer.inner.borrow().size);
 
         (binding, layout)
     }
@@ -29,6 +29,8 @@ fn instanced_binding_layout(id: u32, buffer: &crate::Buffer) -> wgpu::BindGroupL
     wgpu::BindGroupLayoutEntry { binding: id, visibility: wgpu::ShaderStage::VERTEX, ty, count: None }
 }
 
-fn instanced_binding(id: u32, buffer: &wgpu::Buffer) -> wgpu::BindGroupEntry {
-    wgpu::BindGroupEntry { binding: id, resource: wgpu::BindingResource::Buffer(buffer.slice(..)) }
+fn instanced_binding(id: u32, buffer: &wgpu::Buffer, size: usize) -> wgpu::BindGroupEntry {
+    let size = num::NonZeroU64::new(size as u64);
+
+    wgpu::BindGroupEntry { binding: id, resource: wgpu::BindingResource::Buffer { buffer, offset: 0, size } }
 }
