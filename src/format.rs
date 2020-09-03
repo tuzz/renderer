@@ -1,5 +1,6 @@
 #[derive(Clone, Copy)]
 pub enum Format {
+    RU8,
     BgraU8,
     RgbaU8,
     RgbaF16,
@@ -9,6 +10,7 @@ pub enum Format {
 impl Format {
     pub fn texture_format(&self) -> wgpu::TextureFormat {
         match self {
+            Self::RU8 => wgpu::TextureFormat::R8Unorm,
             Self::BgraU8 => wgpu::TextureFormat::Bgra8Unorm,
             Self::RgbaU8 => wgpu::TextureFormat::Rgba8Unorm,
             Self::RgbaF16 => wgpu::TextureFormat::Rgba16Float,
@@ -18,17 +20,18 @@ impl Format {
 
     pub fn component_type(&self) -> wgpu::TextureComponentType {
         match self {
-            Self::BgraU8 | Self::RgbaU8 => wgpu::TextureComponentType::Uint,
+            Self::RU8 | Self::BgraU8 | Self::RgbaU8 => wgpu::TextureComponentType::Uint,
             Self::RgbaF16 | Self::RgbaF32 => wgpu::TextureComponentType::Float,
         }
     }
 
     pub fn channels(&self) -> u32 {
-        4
+        match self { Self::RU8 => 1, _ => 4, }
     }
 
     pub fn bytes_per_channel(&self) -> u32 {
         match self {
+            Self::RU8 => 1,
             Self::BgraU8 => 1,
             Self::RgbaU8 => 1,
             Self::RgbaF16 => 2,

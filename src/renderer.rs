@@ -161,6 +161,10 @@ impl Renderer {
         crate::Format::BgraU8
     }
 
+    pub fn red_u8(&self) -> crate::Format {
+        crate::Format::RU8
+    }
+
     pub fn rgba_u8(&self) -> crate::Format {
         crate::Format::RgbaU8
     }
