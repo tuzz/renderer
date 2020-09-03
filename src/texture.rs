@@ -1,5 +1,4 @@
 use std::{cell, ops, rc};
-use wgpu::util::DeviceExt;
 
 #[derive(Clone)]
 pub struct Texture {
@@ -37,13 +36,14 @@ impl Texture {
         inner.generation += 1;
     }
 
-    pub fn set_data<T: bytemuck::Pod>(&self, queue: &wgpu::Queue, data: &[T]) {
+    pub fn set_data<T: bytemuck::Pod>(&self, queue: &wgpu::Queue, offset: (u32, u32), size: (u32, u32), data: &[T]) {
+        let size = if size == (0, 0) { self.size } else { size };
         let bytes = bytemuck::cast_slice(data);
 
-        let texture_copy = texture_copy_view(&self.texture);
-        let data_layout = texture_data_layout(&self.format, self.size);
+        let texture_copy = texture_copy_view(&self.texture, offset);
+        let data_layout = texture_data_layout(&self.format, size);
 
-        queue.write_texture(texture_copy, bytes, data_layout, extent(self.size));
+        queue.write_texture(texture_copy, bytes, data_layout, extent(size));
     }
 
     pub fn texture_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
@@ -105,19 +105,19 @@ fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
 }
 
+fn texture_copy_view(texture: &wgpu::Texture, (x, y): (u32, u32)) -> wgpu::TextureCopyView {
+    wgpu::TextureCopyView {
+        texture: texture,
+        mip_level: 0,
+        origin: wgpu::Origin3d { x, y, z: 0 },
+    }
+}
+
 fn texture_data_layout(format: &crate::Format, (width, height): (u32, u32)) -> wgpu::TextureDataLayout {
     wgpu::TextureDataLayout {
         offset: 0,
         bytes_per_row: format.bytes_per_texel() * width,
         rows_per_image: height,
-    }
-}
-
-fn texture_copy_view(texture: &wgpu::Texture) -> wgpu::TextureCopyView {
-    wgpu::TextureCopyView {
-        texture: texture,
-        mip_level: 0,
-        origin: wgpu::Origin3d::ZERO,
     }
 }
 

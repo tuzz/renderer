@@ -118,11 +118,15 @@ impl Renderer {
     }
 
     pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[T]) {
+        self.set_part_of_texture(pipeline, index_tuple, (0, 0), (0, 0), data);
+    }
+
+    pub fn set_part_of_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), offset: (u32, u32), size: (u32, u32), data: &[T]) {
         let index = index_tuple.0 * BINDINGS_PER_GROUP + index_tuple.1;
         let relative_index = texture_index(index, &pipeline.program);
 
         let (texture, _) = &pipeline.program.textures[relative_index];
-        texture.set_data(&self.queue, data);
+        texture.set_data(&self.queue, offset, size, data);
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> crate::Pipeline {
