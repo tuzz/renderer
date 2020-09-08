@@ -1,4 +1,4 @@
-use shaderc::ShaderKind;
+use shaderc::{OptimizationLevel, ShaderKind};
 use std::fs;
 
 pub struct Compiler;
@@ -21,9 +21,12 @@ impl Compiler {
 
     pub fn compile_shader(filename: &str, kind: ShaderKind) {
         let mut compiler = shaderc::Compiler::new().unwrap();
+        let mut options = shaderc::CompileOptions::new().unwrap();
+
+        options.set_optimization_level(OptimizationLevel::Performance);
 
         let source = fs::read_to_string(filename).unwrap();
-        let artefact = compiler.compile_into_spirv(&source, kind, filename, "main", None).unwrap();
+        let artefact = compiler.compile_into_spirv(&source, kind, filename, "main", Some(&options)).unwrap();
 
         let outfile = format!("{}.spirv", filename);
         fs::write(outfile, artefact.as_binary_u8()).unwrap();
