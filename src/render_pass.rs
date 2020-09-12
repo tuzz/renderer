@@ -13,8 +13,9 @@ impl RenderPass {
         let (instance_count, vertices_per_instance) = count;
 
         let mut encoder = create_command_encoder(device);
-        let mut render_pass = encoder.begin_render_pass(&descriptor);
+        if targets.is_empty() { return encoder.finish(); }
 
+        let mut render_pass = encoder.begin_render_pass(&descriptor);
         render_pass.set_pipeline(&pipeline.pipeline);
 
         for (i, bind_group) in pipeline.bind_groups.iter().enumerate() {

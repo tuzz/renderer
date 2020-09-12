@@ -40,6 +40,7 @@ impl Renderer {
         let mut inner = self.inner.borrow_mut();
 
         inner.window_size = *new_size;
+        inner.frame = None;
         inner.swap_chain = create_swap_chain(&new_size, &inner.surface, &inner.device);
     }
 
@@ -55,12 +56,12 @@ impl Renderer {
     // the pipeline but it will crash if the texture formats are different.
 
     pub fn render_to(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
-        let targets = targets.iter().map(|target| {
+        let targets = targets.iter().filter_map(|target| {
             match target {
-                crate::Target::Texture(texture) => &texture.view,
+                crate::Target::Texture(texture) => Some(&texture.view),
                 crate::Target::Screen => {
-                    self.start_frame();
-                    &self.frame.as_ref().unwrap().output.view
+                    if !self.start_frame() { return None; }
+                    Some(&self.frame.as_ref().unwrap().output.view)
                 },
             }
         }).collect::<Vec<_>>();
@@ -69,11 +70,17 @@ impl Renderer {
         self.inner.borrow_mut().commands.push(cbuffer);
     }
 
-    pub fn start_frame(&self) {
-        if self.frame.is_some() { return; }
+    pub fn start_frame(&self) -> bool {
+        if self.frame.is_some() { return true; }
 
         let mut inner = self.inner.borrow_mut();
-        inner.frame = Some(inner.swap_chain.get_current_frame().unwrap());
+
+        if let Ok(frame) = inner.swap_chain.get_current_frame() {
+            inner.frame = Some(frame);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn finish_frame(&self) {
