@@ -101,10 +101,6 @@ fn create_sampler(device: &wgpu::Device, filter_mode: crate::FilterMode) -> wgpu
     device.create_sampler(&descriptor)
 }
 
-fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
-    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
-}
-
 fn texture_copy_view(texture: &wgpu::Texture, (x, y): (u32, u32)) -> wgpu::TextureCopyView {
     wgpu::TextureCopyView {
         texture: texture,
