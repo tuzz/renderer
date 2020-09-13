@@ -14,6 +14,7 @@ pub struct InnerR {
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    pub vsync: bool,
     pub swap_chain: wgpu::SwapChain,
     pub frame: Option<wgpu::SwapChainFrame>,
     pub commands: Vec<wgpu::CommandBuffer>,
@@ -26,10 +27,11 @@ impl Renderer {
         let surface = unsafe { instance.create_surface(window) };
         let adapter = get_adapter(&instance, &surface);
         let (device, queue) = get_device(&adapter);
-        let mut swap_chain = create_swap_chain(&window_size, &surface, &device);
+        let vsync = true;
+        let mut swap_chain = create_swap_chain(&window_size, &surface, &device, vsync);
         let frame = Some(swap_chain.get_current_frame().unwrap());
         let commands = vec![];
-        let inner = InnerR { window_size, instance, surface, adapter, device, queue, swap_chain, frame, commands };
+        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, swap_chain, frame, commands };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -41,7 +43,7 @@ impl Renderer {
 
         inner.window_size = *new_size;
         inner.frame = None;
-        inner.swap_chain = create_swap_chain(&new_size, &inner.surface, &inner.device);
+        inner.swap_chain = create_swap_chain(&new_size, &inner.surface, &inner.device, inner.vsync);
     }
 
     pub fn resize_texture(&self, texture: &mut crate::Texture, new_size: (u32, u32)) {
@@ -134,6 +136,14 @@ impl Renderer {
 
         let (texture, _) = &pipeline.program.textures[relative_index];
         texture.set_data(&self.queue, offset, size, data);
+    }
+
+    pub fn set_vsync(&self, boolean: bool) {
+        let mut inner = self.inner.borrow_mut();
+
+        inner.vsync = boolean;
+        inner.frame = None;
+        inner.swap_chain = create_swap_chain(&inner.window_size, &inner.surface, &inner.device, inner.vsync);
     }
 
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> crate::Pipeline {
@@ -247,15 +257,22 @@ fn get_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
     executor::block_on(future).unwrap()
 }
 
-fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surface, device: &wgpu::Device) -> wgpu::SwapChain {
+fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surface, device: &wgpu::Device, vsync: bool) -> wgpu::SwapChain {
     let format = crate::Target::Screen.format();
+
+    // Mailbox might also be available for low-latency triple buffering, but
+    // this consumes more power so isn't great for mobile devices / laptops.
+    let present_mode = match vsync {
+        true => wgpu::PresentMode::Fifo,
+        false => wgpu::PresentMode::Immediate,
+    };
 
     let descriptor = wgpu::SwapChainDescriptor {
         width: window_size.width,
         height: window_size.height,
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         format: format.texture_format(),
-        present_mode: wgpu::PresentMode::Fifo,
+        present_mode,
     };
 
     device.create_swap_chain(surface, &descriptor)
