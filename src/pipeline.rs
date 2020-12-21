@@ -62,8 +62,10 @@ fn create_bind_groups(device: &wgpu::Device, program: &crate::Program) -> (Vec<w
         let (entry, layout) = texture.texture_binding(visibility, *binding_id);
         entries.push(entry); layouts.push(layout); next(binding_id);
 
-        let (entry, layout) = texture.sampler_binding(visibility, *binding_id);
-        entries.push(entry); layouts.push(layout); next(binding_id);
+        if texture.sampler.is_some() {
+            let (entry, layout) = texture.sampler_binding(visibility, *binding_id);
+            entries.push(entry); layouts.push(layout); next(binding_id);
+        }
     }
 
     let wgpu_layouts = layouts.chunks(BINDINGS_PER_GROUP).map(|entries| {

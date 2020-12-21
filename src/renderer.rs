@@ -162,8 +162,8 @@ impl Renderer {
         crate::Uniform::new(&self.device)
     }
 
-    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool) -> crate::Texture {
-        crate::Texture::new(&self.device, (width, height), filter_mode, format, renderable)
+    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, with_sampler: bool) -> crate::Texture {
+        crate::Texture::new(&self.device, (width, height), filter_mode, format, renderable, with_sampler)
     }
 
     pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, instances: crate::Instances, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {
@@ -284,7 +284,23 @@ fn uniform_index(index: usize, program: &crate::Program) -> usize {
 }
 
 fn texture_index(index: usize, program: &crate::Program) -> usize {
-    (index - program.instances.len() - program.uniforms.len()) / 2
+    let mut remaining = (index - program.instances.len() - program.uniforms.len()) as i32;
+
+    for (i, (texture, _)) in program.textures.iter().enumerate() {
+        if remaining == 0 { return i; }
+
+        remaining -= 1;
+
+        if texture.sampler.is_some() {
+            remaining -= 1;
+        }
+
+        if remaining < 0 {
+            panic!("Tried to get a texture but a sampler is in that slot.");
+        }
+    }
+
+    panic!("Tried to a get a texture but nothing is in that slot.");
 }
 
 impl ops::Deref for Renderer {

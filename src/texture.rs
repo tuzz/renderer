@@ -8,7 +8,7 @@ pub struct Texture {
 pub struct InnerT {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
+    pub sampler: Option<wgpu::Sampler>,
     pub size: (u32, u32),
     pub filter_mode: crate::FilterMode,
     pub format: crate::Format,
@@ -17,10 +17,11 @@ pub struct InnerT {
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, renderable: bool) -> Self {
+    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, with_sampler: bool) -> Self {
         let texture = create_texture(device, size, &format, renderable);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-        let sampler = create_sampler(device, filter_mode);
+
+        let sampler = if with_sampler { Some(create_sampler(device, filter_mode)) } else { None };
         let inner = InnerT { texture, view, sampler, size, format, filter_mode, renderable, generation: 0 };
 
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
@@ -56,11 +57,10 @@ impl Texture {
 
     pub fn sampler_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
         let layout = self.sampler_binding_layout(id, visibility);
-        let binding = sampler_binding(id, &self.sampler);
+        let binding = sampler_binding(id, self.sampler.as_ref().unwrap());
 
         (binding, layout)
     }
-
 
     fn texture_binding_layout(&self, id: u32, visibility: &crate::Visibility, format: &crate::Format) -> wgpu::BindGroupLayoutEntry {
         let filterable = self.filter_mode.is_linear();
