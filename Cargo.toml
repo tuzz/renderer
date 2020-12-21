@@ -5,17 +5,17 @@ authors = ["Chris Patuzzo <chris@patuzzo.co.uk>"]
 edition = "2018"
 
 [dependencies]
-bytemuck = "1.3.1"
-futures = "0.3.5"
+bytemuck = "1.4"
+futures = "0.3"
 wgpu = { git = "https://github.com/gfx-rs/wgpu-rs" }
-winit = "0.22.2"
+winit = "0.24"
 
 [dependencies.shaderc]
-version = "0.6.2"
+version = "0.7"
 optional = true
 
 [features]
 shader_compilation = ["shaderc"]
 
 [dev-dependencies]
-png = "0.15.3"
+png = "0.16"

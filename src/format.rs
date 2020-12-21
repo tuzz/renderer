@@ -18,10 +18,10 @@ impl Format {
         }
     }
 
-    pub fn component_type(&self) -> wgpu::TextureComponentType {
+    pub fn sample_type(&self, filterable: bool) -> wgpu::TextureSampleType {
         match self {
-            Self::RU8 | Self::BgraU8 | Self::RgbaU8 => wgpu::TextureComponentType::Uint,
-            Self::RgbaF16 | Self::RgbaF32 => wgpu::TextureComponentType::Float,
+            Self::RU8 | Self::BgraU8 | Self::RgbaU8 => wgpu::TextureSampleType::Uint,
+            Self::RgbaF16 | Self::RgbaF32 => wgpu::TextureSampleType::Float { filterable },
         }
     }
 

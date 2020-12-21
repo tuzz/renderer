@@ -11,4 +11,11 @@ impl FilterMode {
             Self::Nearest => wgpu::FilterMode::Nearest,
         }
     }
+
+    pub fn is_linear(&self) -> bool {
+        match self {
+            Self::Linear => true,
+            Self::Nearest => false,
+        }
+    }
 }

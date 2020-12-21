@@ -39,5 +39,8 @@ impl Program {
 fn create_shader_module(device: &wgpu::Device, bytes: &[u8]) -> wgpu::ShaderModule {
     let spirv = wgpu::util::make_spirv(bytes);
 
-    device.create_shader_module(spirv)
+    let flags = wgpu::ShaderFlags::empty();
+    let descriptor = wgpu::ShaderModuleDescriptor { label: None, source: spirv, flags };
+
+    device.create_shader_module(&descriptor)
 }

@@ -10,6 +10,7 @@ pub struct InnerT {
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
     pub size: (u32, u32),
+    pub filter_mode: crate::FilterMode,
     pub format: crate::Format,
     pub renderable: bool,
     pub generation: u32,
@@ -20,7 +21,7 @@ impl Texture {
         let texture = create_texture(device, size, &format, renderable);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = create_sampler(device, filter_mode);
-        let inner = InnerT { texture, view, sampler, size, format, renderable, generation: 0 };
+        let inner = InnerT { texture, view, sampler, size, format, filter_mode, renderable, generation: 0 };
 
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
@@ -47,23 +48,43 @@ impl Texture {
     }
 
     pub fn texture_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
-        let layout = texture_binding_layout(id, visibility, &self.format);
+        let layout = self.texture_binding_layout(id, visibility, &self.format);
         let binding = texture_binding(id, &self.view);
 
         (binding, layout)
     }
 
     pub fn sampler_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
-        let layout = sampler_binding_layout(id, visibility);
+        let layout = self.sampler_binding_layout(id, visibility);
         let binding = sampler_binding(id, &self.sampler);
 
         (binding, layout)
+    }
+
+
+    fn texture_binding_layout(&self, id: u32, visibility: &crate::Visibility, format: &crate::Format) -> wgpu::BindGroupLayoutEntry {
+        let filterable = self.filter_mode.is_linear();
+
+        let ty = wgpu::BindingType::Texture {
+            sample_type: format.sample_type(filterable),
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        };
+
+        wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
+    }
+
+    fn sampler_binding_layout(&self, id: u32, visibility: &crate::Visibility) -> wgpu::BindGroupLayoutEntry {
+        let filtering = self.filter_mode.is_linear();
+        let ty = wgpu::BindingType::Sampler { comparison: false, filtering };
+
+        wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
     }
 }
 
 fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, renderable: bool) -> wgpu::Texture {
     let mut usage = wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST;
-    if renderable { usage |= wgpu::TextureUsage::OUTPUT_ATTACHMENT; }
+    if renderable { usage |= wgpu::TextureUsage::RENDER_ATTACHMENT; }
 
     let descriptor = wgpu::TextureDescriptor {
         size: extent(size),
@@ -115,22 +136,6 @@ fn texture_data_layout(format: &crate::Format, (width, height): (u32, u32)) -> w
         bytes_per_row: format.bytes_per_texel() * width,
         rows_per_image: height,
     }
-}
-
-fn texture_binding_layout(id: u32, visibility: &crate::Visibility, format: &crate::Format) -> wgpu::BindGroupLayoutEntry {
-    let ty = wgpu::BindingType::SampledTexture {
-        multisampled: false,
-        dimension: wgpu::TextureViewDimension::D2,
-        component_type: format.component_type(),
-    };
-
-    wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
-}
-
-fn sampler_binding_layout(id: u32, visibility: &crate::Visibility) -> wgpu::BindGroupLayoutEntry {
-    let ty = wgpu::BindingType::Sampler { comparison: false };
-
-    wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
 }
 
 fn texture_binding(id: u32, texture_view: &wgpu::TextureView) -> wgpu::BindGroupEntry {

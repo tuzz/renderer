@@ -53,7 +53,7 @@ fn color_attachment<'a>(target: &'a wgpu::TextureView, clear: &Clear) -> wgpu::R
 }
 
 fn render_pass_descriptor<'a>(color_attachments: &'a [wgpu::RenderPassColorAttachmentDescriptor]) -> wgpu::RenderPassDescriptor<'a, 'a> {
-    wgpu::RenderPassDescriptor { depth_stencil_attachment: None, color_attachments }
+    wgpu::RenderPassDescriptor { label: None, depth_stencil_attachment: None, color_attachments }
 }
 
 fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {

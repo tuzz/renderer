@@ -28,7 +28,7 @@ impl Renderer {
         let adapter = get_adapter(&instance, &surface);
         let (device, queue) = get_device(&adapter);
         let vsync = true;
-        let mut swap_chain = create_swap_chain(&window_size, &surface, &device, vsync);
+        let swap_chain = create_swap_chain(&window_size, &surface, &device, vsync);
         let frame = Some(swap_chain.get_current_frame().unwrap());
         let commands = vec![];
         let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, swap_chain, frame, commands };
@@ -270,7 +270,7 @@ fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surfa
     let descriptor = wgpu::SwapChainDescriptor {
         width: window_size.width,
         height: window_size.height,
-        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
         format: format.texture_format(),
         present_mode,
     };

@@ -139,7 +139,7 @@ fn vertex_buffers(slice: &[DescriptorsAndSize]) -> Vec<wgpu::VertexBufferDescrip
 }
 
 fn vertex_state<'a>(vertex_buffers: &'a [wgpu::VertexBufferDescriptor]) -> wgpu::VertexStateDescriptor<'a> {
-    wgpu::VertexStateDescriptor { index_format: wgpu::IndexFormat::Uint16, vertex_buffers }
+    wgpu::VertexStateDescriptor { index_format: None, vertex_buffers }
 }
 
 impl ops::Deref for Pipeline {

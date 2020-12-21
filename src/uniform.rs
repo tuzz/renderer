@@ -23,8 +23,9 @@ impl Uniform {
 
 fn uniform_binding_layout(id: u32, visibility: &crate::Visibility, buffer: &crate::Buffer) -> wgpu::BindGroupLayoutEntry {
     let size = num::NonZeroU64::new(buffer.inner.borrow().size as u64);
+    let uniform = wgpu::BufferBindingType::Uniform;
 
-    let ty = wgpu::BindingType::UniformBuffer { dynamic: false, min_binding_size: size };
+    let ty = wgpu::BindingType::Buffer { ty: uniform, has_dynamic_offset: false, min_binding_size: size };
 
     wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
 }
