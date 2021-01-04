@@ -146,6 +146,10 @@ impl Renderer {
         inner.swap_chain = create_swap_chain(&inner.window_size, &inner.surface, &inner.device, inner.vsync);
     }
 
+    pub fn adapter_info(&self) -> wgpu::AdapterInfo {
+        self.adapter.get_info()
+    }
+
     pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> crate::Pipeline {
         crate::Pipeline::new(&self.device, program, blend_mode, primitive, targets)
     }
