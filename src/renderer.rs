@@ -167,7 +167,7 @@ impl Renderer {
     }
 
     pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, with_sampler: bool) -> crate::Texture {
-        crate::Texture::new(&self.device, (width, height), filter_mode, format, renderable, with_sampler)
+        crate::Texture::new(&self.device, (width, height), filter_mode, format, 1, renderable, with_sampler)
     }
 
     pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, instances: crate::Instances, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {

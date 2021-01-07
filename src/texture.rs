@@ -12,17 +12,18 @@ pub struct InnerT {
     pub size: (u32, u32),
     pub filter_mode: crate::FilterMode,
     pub format: crate::Format,
+    pub msaa_samples: u32,
     pub renderable: bool,
     pub generation: u32,
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, with_sampler: bool) -> Self {
-        let texture = create_texture(device, size, &format, renderable);
+    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, msaa_samples: u32, renderable: bool, with_sampler: bool) -> Self {
+        let texture = create_texture(device, size, &format, msaa_samples, renderable);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = if with_sampler { Some(create_sampler(device, filter_mode)) } else { None };
-        let inner = InnerT { texture, view, sampler, size, format, filter_mode, renderable, generation: 0 };
+        let inner = InnerT { texture, view, sampler, size, format, msaa_samples, filter_mode, renderable, generation: 0 };
 
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
@@ -33,7 +34,7 @@ impl Texture {
 
         let mut inner = self.inner.borrow_mut();
         inner.size = new_size;
-        inner.texture = create_texture(device, inner.size, &inner.format, inner.renderable);
+        inner.texture = create_texture(device, inner.size, &inner.format, inner.msaa_samples, inner.renderable);
         inner.view = inner.texture.create_view(&wgpu::TextureViewDescriptor::default());
         inner.generation += 1;
     }
@@ -68,7 +69,7 @@ impl Texture {
         let ty = wgpu::BindingType::Texture {
             sample_type: format.sample_type(filterable),
             view_dimension: wgpu::TextureViewDimension::D2,
-            multisampled: false,
+            multisampled: self.msaa_samples > 1,
         };
 
         wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
@@ -82,14 +83,14 @@ impl Texture {
     }
 }
 
-fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, renderable: bool) -> wgpu::Texture {
+fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, msaa_samples: u32, renderable: bool) -> wgpu::Texture {
     let mut usage = wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST;
     if renderable { usage |= wgpu::TextureUsage::RENDER_ATTACHMENT; }
 
     let descriptor = wgpu::TextureDescriptor {
         size: extent(size),
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count: msaa_samples,
         dimension: wgpu::TextureDimension::D2,
         format: format.texture_format(),
         usage,
