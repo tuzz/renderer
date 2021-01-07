@@ -2,6 +2,7 @@
 pub enum Visibility {
     VertexShader,
     FragmentShader,
+    BothShaders,
 }
 
 impl Visibility {
@@ -9,6 +10,7 @@ impl Visibility {
         match self {
             Self::VertexShader => wgpu::ShaderStage::VERTEX,
             Self::FragmentShader => wgpu::ShaderStage::FRAGMENT,
+            Self::BothShaders => wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
         }
     }
 }

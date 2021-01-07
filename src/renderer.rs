@@ -225,6 +225,10 @@ impl Renderer {
         crate::Visibility::FragmentShader
     }
 
+    pub fn visible_to_both_shaders(&self) -> crate::Visibility {
+        crate::Visibility::BothShaders
+    }
+
     pub fn additive_blend(&self) -> crate::BlendMode {
         crate::BlendMode::additive()
     }
