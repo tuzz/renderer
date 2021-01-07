@@ -58,13 +58,11 @@ impl Renderer {
     // the pipeline but it will crash if the texture formats are different.
 
     pub fn render_to(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
-        let targets = targets.iter().filter_map(|target| {
-            match target {
-                crate::Target::Texture(texture) => Some(&texture.view),
-                crate::Target::Screen => {
-                    if !self.start_frame() { return None; }
-                    Some(&self.frame.as_ref().unwrap().output.view)
-                },
+        let targets = targets.iter().filter(|t| {
+            if let crate::Target::Screen = t {
+                self.start_frame()
+            } else {
+                true
             }
         }).collect::<Vec<_>>();
 

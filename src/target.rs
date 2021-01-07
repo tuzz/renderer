@@ -11,4 +11,11 @@ impl Target {
             Self::Texture(t) => t.format,
         }
     }
+
+    pub fn view<'a>(&'a self, renderer: &'a crate::Renderer) -> &'a wgpu::TextureView {
+        match self {
+            crate::Target::Screen => &renderer.frame.as_ref().unwrap().output.view,
+            crate::Target::Texture(t) => &t.view,
+        }
+    }
 }

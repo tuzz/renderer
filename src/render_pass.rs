@@ -10,10 +10,10 @@ impl<'a> RenderPass<'a> {
         Self { renderer }
     }
 
-    pub fn render(&self, targets: &[&wgpu::TextureView], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
+    pub fn render(&self, targets: &[&crate::Target], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
         pipeline.recreate_on_buffer_or_texture_resize(&self.renderer.device);
 
-        let color_attachments = color_attachments(targets, pipeline, clear);
+        let color_attachments = self.color_attachments(targets, pipeline, clear);
         let descriptor = render_pass_descriptor(&color_attachments);
         let attributes = &pipeline.program.attributes;
         let (instance_count, vertices_per_instance) = count;
@@ -41,23 +41,25 @@ impl<'a> RenderPass<'a> {
         drop(render_pass);
         encoder.finish()
     }
-}
 
-fn color_attachments<'a>(targets: &'a [&wgpu::TextureView], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
-    targets.iter().map(|t| color_attachment(t, pipeline, clear)).collect()
-}
+    fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
+        targets.iter().map(|t| self.color_attachment(t, pipeline, clear)).collect()
+    }
 
-fn color_attachment<'a>(target: &'a wgpu::TextureView, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
-    let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
-    let store = true;
-    let ops = wgpu::Operations { load, store };
+    fn color_attachment(&self, target: &'a crate::Target, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
+        let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
+        let store = true;
+        let ops = wgpu::Operations { load, store };
 
-    let (attachment, resolve_target) = match &pipeline.msaa_texture {
-        Some(t) => (&t.view, Some(target)),
-        None => (target, None),
-    };
+        let output = target.view(&self.renderer);
 
-    wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, ops }
+        let (attachment, resolve_target) = match &pipeline.msaa_texture {
+            Some(t) => (&t.view, Some(output)),
+            None => (output, None),
+        };
+
+        wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, ops }
+    }
 }
 
 fn render_pass_descriptor<'a>(color_attachments: &'a [wgpu::RenderPassColorAttachmentDescriptor]) -> wgpu::RenderPassDescriptor<'a, 'a> {
