@@ -146,6 +146,12 @@ impl Renderer {
         inner.swap_chain = create_swap_chain(&inner.window_size, &inner.surface, &inner.device, inner.vsync);
     }
 
+    pub fn set_msaa_samples(&self, pipeline: &crate::Pipeline, msaa_samples: u32) {
+        let window_size = (self.window_size.width, self.window_size.height);
+
+        pipeline.set_msaa_samples(&self.device, window_size, msaa_samples);
+    }
+
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
         self.adapter.get_info()
     }

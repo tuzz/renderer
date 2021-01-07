@@ -46,6 +46,18 @@ impl Pipeline {
         inner.pipeline = pipeline;
         inner.program.seen_generations = actual;
     }
+
+    pub fn set_msaa_samples(&self, device: &wgpu::Device, window_size: (u32, u32), msaa_samples: u32) {
+        let (bind_groups, layouts) = create_bind_groups(device, &self.program);
+        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layouts, msaa_samples, &self.targets);
+        let msaa_texture = create_msaa_texture(device, window_size, msaa_samples, &self.targets);
+
+        let mut inner = self.inner.borrow_mut();
+        inner.bind_groups = bind_groups;
+        inner.pipeline = pipeline;
+        inner.msaa_samples = msaa_samples;
+        inner.msaa_texture = msaa_texture;
+    }
 }
 
 fn create_bind_groups(device: &wgpu::Device, program: &crate::Program) -> (Vec<wgpu::BindGroup>, Vec<wgpu::BindGroupLayout>) {
