@@ -150,8 +150,9 @@ impl Renderer {
         self.adapter.get_info()
     }
 
-    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> crate::Pipeline {
-        crate::Pipeline::new(&self.device, program, blend_mode, primitive, targets)
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> crate::Pipeline {
+        let window_size = (self.window_size.width, self.window_size.height);
+        crate::Pipeline::new(&self.device, window_size, program, blend_mode, primitive, msaa_samples, targets)
     }
 
     pub fn attribute(&self, location: usize, size: u32) -> crate::Attribute {

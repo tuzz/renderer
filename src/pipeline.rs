@@ -10,6 +10,8 @@ pub struct InnerP {
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
     pub primitive: crate::Primitive,
+    pub msaa_samples: u32,
+    pub msaa_texture: Option<crate::Texture>,
     pub targets: Vec<crate::Target>,
 }
 
@@ -18,10 +20,11 @@ pub struct InnerP {
 pub const BINDINGS_PER_GROUP: usize = 4;
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, targets: Vec<crate::Target>) -> Self {
+    pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> Self {
         let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let pipeline = create_render_pipeline(device, &program, &blend_mode, &primitive, &layouts, &targets);
-        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, targets };
+        let pipeline = create_render_pipeline(device, &program, &blend_mode, &primitive, &layouts, msaa_samples, &targets);
+        let msaa_texture = create_msaa_texture(device, window_size, msaa_samples, &targets);
+        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, msaa_texture, targets };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -34,7 +37,7 @@ impl Pipeline {
         let actual = self.program.latest_generations().collect();
 
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layouts, &self.targets);
+        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layouts, self.msaa_samples, &self.targets);
 
         let mut inner = self.inner.borrow_mut();
         inner.bind_groups = bind_groups;
@@ -86,7 +89,7 @@ fn next(binding_id: &mut u32) {
     *binding_id %= BINDINGS_PER_GROUP as u32;
 }
 
-fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], targets: &[crate::Target]) -> wgpu::RenderPipeline {
+fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], msaa_samples: u32, targets: &[crate::Target]) -> wgpu::RenderPipeline {
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
     let color_states = targets.iter().map(|t| blend_mode.descriptor(t.format())).collect::<Vec<_>>();
@@ -101,13 +104,32 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend
         color_states: &color_states,
         depth_stencil_state: None,
         vertex_state: vertex_state(&vertex_buffers),
-        sample_count: 1,
+        sample_count: msaa_samples,
         sample_mask: !0,
         alpha_to_coverage_enabled: false,
         label: None,
     };
 
     device.create_render_pipeline(&descriptor)
+}
+
+fn create_msaa_texture(device: &wgpu::Device, window_size: (u32, u32), msaa_samples: u32, targets: &[crate::Target]) -> Option<crate::Texture> {
+    if msaa_samples == 1 { return None; }
+
+    // If there are multiple render targets, configure the MSAA texture based on the first one.
+    let target = &targets[0];
+
+    let size = match target {
+        crate::Target::Screen => window_size,
+        crate::Target::Texture(t) => t.size,
+    };
+
+    let filter_mode = crate::FilterMode::Nearest; // Not used
+    let format = target.format();
+    let renderable = true;
+    let with_sampler = false;
+
+    Some(crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, with_sampler))
 }
 
 fn create_layout(device: &wgpu::Device, layouts: &[wgpu::BindGroupLayout]) -> wgpu::PipelineLayout {

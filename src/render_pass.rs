@@ -7,7 +7,7 @@ impl RenderPass {
     pub fn render(device: &wgpu::Device, targets: &[&wgpu::TextureView], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
         pipeline.recreate_on_buffer_or_texture_resize(device);
 
-        let color_attachments = color_attachments(targets, clear);
+        let color_attachments = color_attachments(targets, pipeline, clear);
         let descriptor = render_pass_descriptor(&color_attachments);
         let attributes = &pipeline.program.attributes;
         let (instance_count, vertices_per_instance) = count;
@@ -37,17 +37,19 @@ impl RenderPass {
     }
 }
 
-fn color_attachments<'a>(targets: &'a [&wgpu::TextureView], clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
-    targets.iter().map(|t| color_attachment(t, clear)).collect()
+fn color_attachments<'a>(targets: &'a [&wgpu::TextureView], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
+    targets.iter().map(|t| color_attachment(t, pipeline, clear)).collect()
 }
 
-fn color_attachment<'a>(target: &'a wgpu::TextureView, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
+fn color_attachment<'a>(target: &'a wgpu::TextureView, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
     let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
     let store = true;
     let ops = wgpu::Operations { load, store };
 
-    let attachment = target;
-    let resolve_target = None;
+    let (attachment, resolve_target) = match &pipeline.msaa_texture {
+        Some(t) => (&t.view, Some(target)),
+        None => (target, None),
+    };
 
     wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, ops }
 }
