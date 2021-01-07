@@ -68,7 +68,9 @@ impl Renderer {
             }
         }).collect::<Vec<_>>();
 
-        let cbuffer = crate::RenderPass::render(&self.device, &targets, pipeline, &clear_color, viewport, count);
+        let render_pass = crate::RenderPass::new(&self);
+        let cbuffer = render_pass.render(&targets, pipeline, &clear_color, viewport, count);
+
         self.inner.borrow_mut().commands.push(cbuffer);
     }
 

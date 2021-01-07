@@ -1,18 +1,24 @@
-pub struct RenderPass;
+pub struct RenderPass<'a> {
+    renderer: &'a crate::Renderer,
+}
 
 type Clear = Option<crate::ClearColor>;
 type View<'a> = Option<&'a crate::Viewport>;
 
-impl RenderPass {
-    pub fn render(device: &wgpu::Device, targets: &[&wgpu::TextureView], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
-        pipeline.recreate_on_buffer_or_texture_resize(device);
+impl<'a> RenderPass<'a> {
+    pub fn new(renderer: &'a crate::Renderer) -> Self {
+        Self { renderer }
+    }
+
+    pub fn render(&self, targets: &[&wgpu::TextureView], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
+        pipeline.recreate_on_buffer_or_texture_resize(&self.renderer.device);
 
         let color_attachments = color_attachments(targets, pipeline, clear);
         let descriptor = render_pass_descriptor(&color_attachments);
         let attributes = &pipeline.program.attributes;
         let (instance_count, vertices_per_instance) = count;
 
-        let mut encoder = create_command_encoder(device);
+        let mut encoder = create_command_encoder(&self.renderer.device);
         if targets.is_empty() { return encoder.finish(); }
 
         let mut render_pass = encoder.begin_render_pass(&descriptor);
