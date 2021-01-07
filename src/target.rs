@@ -18,4 +18,11 @@ impl Target {
             crate::Target::Texture(t) => &t.view,
         }
     }
+
+    pub fn size(&self, window_size: (u32, u32)) -> (u32, u32) {
+        match self {
+            crate::Target::Screen => window_size,
+            crate::Target::Texture(t) => t.size,
+        }
+    }
 }

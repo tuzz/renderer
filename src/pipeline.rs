@@ -29,7 +29,9 @@ impl Pipeline {
         Self { inner: cell::RefCell::new(inner) }
     }
 
-    pub fn recreate_on_buffer_or_texture_resize(&self, device: &wgpu::Device) {
+    pub fn recreate_on_buffer_or_texture_resize(&self, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
+        resize_msaa_texture(&self, device, window_size, targets);
+
         let actual = self.program.latest_generations();
         let expected = &self.program.seen_generations;
 
@@ -119,17 +121,25 @@ fn create_msaa_texture(device: &wgpu::Device, window_size: (u32, u32), msaa_samp
     // If there are multiple render targets, configure the MSAA texture based on the first one.
     let target = &targets[0];
 
-    let size = match target {
-        crate::Target::Screen => window_size,
-        crate::Target::Texture(t) => t.size,
-    };
-
+    let size = target.size(window_size);
     let filter_mode = crate::FilterMode::Nearest; // Not used
     let format = target.format();
     let renderable = true;
     let with_sampler = false;
 
     Some(crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, with_sampler))
+}
+
+fn resize_msaa_texture(pipeline: &Pipeline, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
+    if pipeline.msaa_samples == 1 { return; }
+
+    let target = &targets[0];
+    let new_size = target.size(window_size);
+
+    let mut inner = pipeline.inner.borrow_mut();
+    let msaa_texture = inner.msaa_texture.as_mut().unwrap();
+
+    msaa_texture.resize(device, new_size);
 }
 
 fn create_layout(device: &wgpu::Device, layouts: &[wgpu::BindGroupLayout]) -> wgpu::PipelineLayout {

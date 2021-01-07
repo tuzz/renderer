@@ -11,7 +11,7 @@ impl<'a> RenderPass<'a> {
     }
 
     pub fn render(&self, targets: &[&crate::Target], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
-        pipeline.recreate_on_buffer_or_texture_resize(&self.renderer.device);
+        pipeline.recreate_on_buffer_or_texture_resize(&self.renderer.device, self.window_size(), targets);
 
         let color_attachments = self.color_attachments(targets, pipeline, clear);
         let descriptor = render_pass_descriptor(&color_attachments);
@@ -40,6 +40,10 @@ impl<'a> RenderPass<'a> {
 
         drop(render_pass);
         encoder.finish()
+    }
+
+    fn window_size(&self) -> (u32, u32) {
+        (self.renderer.window_size.width, self.renderer.window_size.height)
     }
 
     fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
