@@ -63,8 +63,15 @@ fn main() {
     // We're going to render a triangle strip to reuse vertices (indexes not supported).
     let primitive = renderer.triangle_strip_primitive();
 
-    // TODO
-    let msaa_samples = 4;
+    // We don't need to anti-alias the quads example because all lines align with pixels
+    // There's currently no way to get the supported number of samples from WGPU. Currently:
+    //
+    // - Vulkan should work for 1, 2, 4, and 8 samlpes
+    // - DX12 is limited to 1, 4 and 8 samples
+    // - macOS and DX11 are limited to 1 and 4 samples
+    //
+    // When samples is set to 1, MSAA is switched off completely, incurring no overhead.
+    let msaa_samples = 1;
 
     // We're going to render to the screen but you _could_ render to a texture, too.
     let target = renderer.screen_target();
