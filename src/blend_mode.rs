@@ -13,25 +13,25 @@ impl BlendMode {
         Self { src_factor: wgpu::BlendFactor::One, dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha }
     }
 
-    pub fn descriptor(&self, target_format: crate::Format) -> wgpu::ColorStateDescriptor {
-        let blend_descriptor = blend_descriptor(self.src_factor, self.dst_factor);
+    pub fn state(&self, target_format: crate::Format) -> wgpu::ColorTargetState {
+        let blend_state = blend_state(self.src_factor, self.dst_factor);
 
-        color_state_descriptor(blend_descriptor, target_format)
+        color_target_state(blend_state, target_format)
     }
 }
 
-fn blend_descriptor(src_factor: wgpu::BlendFactor, dst_factor: wgpu::BlendFactor) -> wgpu::BlendDescriptor {
-    wgpu::BlendDescriptor {
+fn blend_state(src_factor: wgpu::BlendFactor, dst_factor: wgpu::BlendFactor) -> wgpu::BlendState {
+    wgpu::BlendState {
         src_factor,
         dst_factor,
         operation: wgpu::BlendOperation::Add,
     }
 }
 
-fn color_state_descriptor(blend_descriptor: wgpu::BlendDescriptor, target_format: crate::Format) -> wgpu::ColorStateDescriptor {
-    wgpu::ColorStateDescriptor {
-        color_blend: blend_descriptor.clone(),
-        alpha_blend: blend_descriptor,
+fn color_target_state(blend_state: wgpu::BlendState, target_format: crate::Format) -> wgpu::ColorTargetState {
+    wgpu::ColorTargetState {
+        color_blend: blend_state.clone(),
+        alpha_blend: blend_state,
         format: target_format.texture_format(),
         write_mask: wgpu::ColorWrite::ALL,
     }

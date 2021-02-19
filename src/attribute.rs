@@ -1,7 +1,7 @@
 #[derive(Clone)]
 pub struct Attribute {
     pub buffer: crate::Buffer,
-    pub descriptor: wgpu::VertexAttributeDescriptor,
+    pub inner: wgpu::VertexAttribute,
     pub location: usize,
     pub size: u32,
 }
@@ -10,13 +10,13 @@ impl Attribute {
     pub fn new(device: &wgpu::Device, location: usize, size: u32) -> Self {
         let usage = wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST;
         let buffer = crate::Buffer::new(device, usage);
-        let descriptor = attribute_descriptor(location as u32, size);
+        let inner = wgpu_attribute(location as u32, size);
 
-        Self { buffer, descriptor, location, size }
+        Self { buffer, inner, location, size }
     }
 }
 
-fn attribute_descriptor(shader_location: u32, size: u32) -> wgpu::VertexAttributeDescriptor {
+fn wgpu_attribute(shader_location: u32, size: u32) -> wgpu::VertexAttribute {
     let format = match size {
         1 => wgpu::VertexFormat::Float,
         2 => wgpu::VertexFormat::Float2,
@@ -25,5 +25,5 @@ fn attribute_descriptor(shader_location: u32, size: u32) -> wgpu::VertexAttribut
         _ => panic!("Unspported attribute size"),
     };
 
-    wgpu::VertexAttributeDescriptor { offset: 0, shader_location, format }
+    wgpu::VertexAttribute { offset: 0, shader_location, format }
 }

@@ -13,6 +13,7 @@ pub struct InnerP {
     pub msaa_samples: u32,
     pub msaa_texture: Option<crate::Texture>,
     pub targets: Vec<crate::Target>,
+    pub color_states: Vec<wgpu::ColorTargetState>,
 }
 
 // At time of writing, wgpu limits the number of bind group sets to 8 and the
@@ -22,9 +23,10 @@ pub const BINDINGS_PER_GROUP: usize = 4;
 impl Pipeline {
     pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> Self {
         let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let pipeline = create_render_pipeline(device, &program, &blend_mode, &primitive, &layouts, msaa_samples, &targets);
+        let color_states = create_color_target_states(&targets, &blend_mode);
+        let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
         let msaa_texture = create_msaa_texture(device, window_size, msaa_samples, &targets);
-        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, msaa_texture, targets };
+        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, msaa_texture, targets, color_states };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -39,7 +41,7 @@ impl Pipeline {
         let actual = self.program.latest_generations().collect();
 
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layouts, self.msaa_samples, &self.targets);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, self.msaa_samples, &self.color_states);
 
         let mut inner = self.inner.borrow_mut();
         inner.bind_groups = bind_groups;
@@ -49,7 +51,7 @@ impl Pipeline {
 
     pub fn set_msaa_samples(&self, device: &wgpu::Device, window_size: (u32, u32), msaa_samples: u32) {
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let pipeline = create_render_pipeline(device, &self.program, &self.blend_mode, &self.primitive, &layouts, msaa_samples, &self.targets);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, msaa_samples, &self.color_states);
         let msaa_texture = create_msaa_texture(device, window_size, msaa_samples, &self.targets);
 
         let mut inner = self.inner.borrow_mut();
@@ -103,25 +105,24 @@ fn next(binding_id: &mut u32) {
     *binding_id %= BINDINGS_PER_GROUP as u32;
 }
 
-fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, blend_mode: &crate::BlendMode, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], msaa_samples: u32, targets: &[crate::Target]) -> wgpu::RenderPipeline {
+fn create_color_target_states(targets: &[crate::Target], blend_mode: &crate::BlendMode) -> Vec<wgpu::ColorTargetState> {
+    targets.iter().map(|t| blend_mode.state(t.format())).collect::<Vec<_>>()
+}
+
+fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], msaa_samples: u32, color_states: &[wgpu::ColorTargetState]) -> wgpu::RenderPipeline {
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
-    let color_states = targets.iter().map(|t| blend_mode.descriptor(t.format())).collect::<Vec<_>>();
     let layout = create_layout(device, layouts);
+    let multisample_state = multisample_state(msaa_samples);
 
     let descriptor = wgpu::RenderPipelineDescriptor {
-        layout: Some(&layout),
-        vertex_stage: programmable_stage(&program.vertex_shader),
-        fragment_stage: Some(programmable_stage(&program.fragment_shader)),
-        rasterization_state: None,
-        primitive_topology: primitive.topology(),
-        color_states: &color_states,
-        depth_stencil_state: None,
-        vertex_state: vertex_state(&vertex_buffers),
-        sample_count: msaa_samples,
-        sample_mask: !0,
-        alpha_to_coverage_enabled: false,
         label: None,
+        layout: Some(&layout),
+        vertex: vertex_state(&program.vertex_shader, &vertex_buffers),
+        primitive: primitive_state(primitive),
+        depth_stencil: None,
+        multisample: multisample_state,
+        fragment: Some(fragment_state(&program.fragment_shader, color_states)),
     };
 
     device.create_render_pipeline(&descriptor)
@@ -162,30 +163,44 @@ fn create_layout(device: &wgpu::Device, layouts: &[wgpu::BindGroupLayout]) -> wg
     device.create_pipeline_layout(&descriptor)
 }
 
-fn programmable_stage(module: &wgpu::ShaderModule) -> wgpu::ProgrammableStageDescriptor {
-    wgpu::ProgrammableStageDescriptor { module, entry_point: "main" }
+fn primitive_state(primitive: &crate::Primitive) -> wgpu::PrimitiveState {
+    wgpu::PrimitiveState {
+        topology: primitive.topology(),
+        strip_index_format: None,
+        front_face: wgpu::FrontFace::default(),
+        cull_mode: None,
+        polygon_mode: wgpu::PolygonMode::default(),
+    }
 }
 
-type DescriptorsAndSize = (Vec<wgpu::VertexAttributeDescriptor>, u32);
-
-fn attribute_descriptors(attributes: &[crate::Attribute]) -> Vec<DescriptorsAndSize> {
-    attributes.iter().map(|a| (vec![a.descriptor.clone()], a.size)).collect::<Vec<_>>()
+fn multisample_state(msaa_samples: u32) -> wgpu::MultisampleState {
+    wgpu::MultisampleState { count: msaa_samples, mask: !0, alpha_to_coverage_enabled: false }
 }
 
-fn vertex_buffers(slice: &[DescriptorsAndSize]) -> Vec<wgpu::VertexBufferDescriptor> {
+type AttributesAndSize = (Vec<wgpu::VertexAttribute>, u32);
+
+fn attribute_descriptors(attributes: &[crate::Attribute]) -> Vec<AttributesAndSize> {
+    attributes.iter().map(|a| (vec![a.inner.clone()], a.size)).collect::<Vec<_>>()
+}
+
+fn vertex_buffers(slice: &[AttributesAndSize]) -> Vec<wgpu::VertexBufferLayout> {
     slice.iter().map(|(descriptors, size)| {
         let stride = std::mem::size_of::<f32>() * *size as usize;
 
-        wgpu::VertexBufferDescriptor {
-          stride: stride as wgpu::BufferAddress,
+        wgpu::VertexBufferLayout {
+          array_stride: stride as wgpu::BufferAddress,
           step_mode: wgpu::InputStepMode::Vertex,
           attributes: descriptors,
       }
     }).collect::<Vec<_>>()
 }
 
-fn vertex_state<'a>(vertex_buffers: &'a [wgpu::VertexBufferDescriptor]) -> wgpu::VertexStateDescriptor<'a> {
-    wgpu::VertexStateDescriptor { index_format: None, vertex_buffers }
+fn vertex_state<'a>(module: &'a wgpu::ShaderModule, buffers: &'a [wgpu::VertexBufferLayout]) -> wgpu::VertexState<'a> {
+    wgpu::VertexState { module, entry_point: "main", buffers }
+}
+
+fn fragment_state<'a>(module: &'a wgpu::ShaderModule, targets: &'a [wgpu::ColorTargetState]) -> wgpu::FragmentState<'a> {
+    wgpu::FragmentState { module, entry_point: "main", targets }
 }
 
 impl ops::Deref for Pipeline {

@@ -19,10 +19,7 @@ impl Format {
     }
 
     pub fn sample_type(&self, filterable: bool) -> wgpu::TextureSampleType {
-        match self {
-            Self::RU8 | Self::BgraU8 | Self::RgbaU8 => wgpu::TextureSampleType::Uint,
-            Self::RgbaF16 | Self::RgbaF32 => wgpu::TextureSampleType::Float { filterable },
-        }
+        wgpu::TextureSampleType::Float { filterable }
     }
 
     pub fn channels(&self) -> u32 {
