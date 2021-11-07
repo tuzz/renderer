@@ -18,6 +18,7 @@ pub struct InnerR {
     pub swap_chain: wgpu::SwapChain,
     pub frame: Option<wgpu::SwapChainFrame>,
     pub commands: Vec<wgpu::CommandBuffer>,
+    pub stream: Option<crate::Stream>,
 }
 
 impl Renderer {
@@ -31,7 +32,8 @@ impl Renderer {
         let swap_chain = create_swap_chain(&window_size, &surface, &device, vsync);
         let frame = Some(swap_chain.get_current_frame().unwrap());
         let commands = vec![];
-        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, swap_chain, frame, commands };
+        let stream = None;
+        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, swap_chain, frame, commands, stream };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -86,12 +88,16 @@ impl Renderer {
     }
 
     pub fn finish_frame(&self) {
-        self.flush_commands();
+        self.flush();
         self.inner.borrow_mut().frame = None;
     }
 
-    pub fn flush_commands(&self) {
+    pub fn flush(&self) {
         self.queue.submit(self.inner.borrow_mut().commands.drain(..));
+
+        if let Some(stream) = &mut self.inner.borrow_mut().stream {
+            stream.initiate_buffer_mapping();
+        }
     }
 
     pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
@@ -151,16 +157,21 @@ impl Renderer {
     }
 
     pub fn set_stream(&self, pipeline: &crate::Pipeline, stream: Option<crate::Stream>) {
-        pipeline.set_stream(&self.device, stream);
+        self.inner.borrow_mut().stream = stream;
+        pipeline.set_streaming(&self.device, self.stream.is_some());
+    }
+
+    pub fn stream(&self) -> crate::Stream { // TODO: pass in a processing closure
+        crate::Stream::new()
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
         self.adapter.get_info()
     }
 
-    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, stream: Option<crate::Stream>, targets: Vec<crate::Target>) -> crate::Pipeline {
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> crate::Pipeline {
         let window_size = (self.window_size.width, self.window_size.height);
-        crate::Pipeline::new(&self.device, window_size, program, blend_mode, primitive, msaa_samples, stream, targets)
+        crate::Pipeline::new(&self.device, window_size, program, blend_mode, primitive, msaa_samples, self.stream.is_some(), targets)
     }
 
     pub fn attribute(&self, location: usize, size: u32) -> crate::Attribute {
