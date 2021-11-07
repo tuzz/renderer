@@ -57,7 +57,7 @@ impl<'a> RenderPass<'a> {
 
         let output = target.view(&self.renderer);
 
-        let (attachment, resolve_target) = match &pipeline.msaa_texture {
+        let (attachment, resolve_target) = match &pipeline.screen_texture {
             Some(t) => (&t.view, Some(output)),
             None => (output, None),
         };
