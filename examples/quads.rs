@@ -74,7 +74,9 @@ fn main() {
     let msaa_samples = 1;
 
     // TODO: explain
-    let stream = None;
+    let stream = Some(renderer.stream(|buffer_view| {
+        println!("{:?}", buffer_view);
+    }));
 
     // We're going to render to the screen but you _could_ render to a texture, too.
     let target = renderer.screen_target();

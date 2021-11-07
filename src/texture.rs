@@ -78,7 +78,7 @@ impl Texture {
         let ty = wgpu::BindingType::Texture {
             sample_type: format.sample_type(filterable),
             view_dimension: wgpu::TextureViewDimension::D2,
-            multisampled: self.msaa_samples > 1,
+            multisampled: true,
         };
 
         wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }

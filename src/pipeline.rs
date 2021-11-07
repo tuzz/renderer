@@ -186,7 +186,7 @@ fn primitive_state(primitive: &crate::Primitive) -> wgpu::PrimitiveState {
 }
 
 fn multisample_state(msaa_samples: u32) -> wgpu::MultisampleState {
-    wgpu::MultisampleState { count: msaa_samples, mask: !0, alpha_to_coverage_enabled: false }
+    wgpu::MultisampleState { count: 4, mask: !0, alpha_to_coverage_enabled: false }
 }
 
 type AttributesAndSize = (Vec<wgpu::VertexAttribute>, u32);

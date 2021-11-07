@@ -13,7 +13,7 @@ pub struct InnerB {
     pub generation: u32,
 }
 
-const INITIAL_SIZE: usize = mem::size_of::<f32>() * 16; // Enough for a mat4 uniform.
+const INITIAL_SIZE: usize = mem::size_of::<f32>() * 1920000; // Enough for a mat4 uniform.
 const HEADROOM: usize = mem::size_of::<f32>() * 256;
 
 impl Buffer {

@@ -44,7 +44,7 @@ impl<'a> RenderPass<'a> {
 
             encoder.copy_texture_to_buffer(
                 texture.texture_copy_view((0, 0)),
-                stream.buffer_copy_view(),
+                stream.buffer_copy_view_for_next_frame(),
                 texture.extent(),
             );
         };

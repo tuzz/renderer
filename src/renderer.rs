@@ -150,6 +150,17 @@ impl Renderer {
         pipeline.set_msaa_samples(&self.device, msaa_samples);
     }
 
+    pub fn stream<P: Fn(wgpu::BufferView) + 'static>(&self, process: P) -> crate::Stream {
+        crate::Stream {
+            buffer: crate::Buffer::new(&self.device, wgpu::BufferUsage::COPY_DST),
+            offset: 0,
+            width: 1600,
+            height: 1200,
+            format: crate::Format::BgraU8,
+            process: Box::new(process),
+        }
+    }
+
     pub fn set_stream(&self, pipeline: &crate::Pipeline, stream: Option<crate::Stream>) {
         pipeline.set_stream(&self.device, stream);
     }
