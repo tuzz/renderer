@@ -57,19 +57,25 @@ impl<'a> RenderPass<'a> {
     }
 
     fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
-        targets.iter().map(|t| self.color_attachment(t, pipeline, clear)).collect()
+        let mut attachments = targets.iter().map(|t| self.color_attachment(t.view(&self.renderer), pipeline, clear)).collect::<Vec<_>>();
+
+        if let Some(texture) = &pipeline.screen_texture {
+            if pipeline.msaa_samples == 1 {
+                attachments.push(self.color_attachment(&texture.view, pipeline, clear));
+            }
+        }
+
+        attachments
     }
 
-    fn color_attachment(&self, target: &'a crate::Target, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
+    fn color_attachment(&self, view: &'a wgpu::TextureView, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
         let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
         let store = true;
         let ops = wgpu::Operations { load, store };
 
-        let output = target.view(&self.renderer);
-
-        let (attachment, resolve_target) = match &pipeline.screen_texture {
-            Some(t) => (&t.view, Some(output)),
-            None => (output, None),
+        let (attachment, resolve_target) = match pipeline.msaa_samples {
+            1 => (view, None),
+            _ => (&pipeline.screen_texture.as_ref().unwrap().view, Some(view)),
         };
 
         wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, ops }

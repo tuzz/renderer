@@ -7,6 +7,7 @@ pub struct Pipeline {
 pub struct InnerP {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_groups: Vec<wgpu::BindGroup>,
+    pub layouts: Vec<wgpu::BindGroupLayout>,
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
     pub primitive: crate::Primitive,
@@ -14,7 +15,6 @@ pub struct InnerP {
     pub stream: Option<crate::Stream>,
     pub screen_texture: Option<crate::Texture>,
     pub targets: Vec<crate::Target>,
-    pub color_states: Vec<wgpu::ColorTargetState>,
     pub window_size: (u32, u32),
 }
 
@@ -25,10 +25,10 @@ pub const BINDINGS_PER_GROUP: usize = 4;
 impl Pipeline {
     pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, stream: Option<crate::Stream>, targets: Vec<crate::Target>) -> Self {
         let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let color_states = create_color_target_states(&targets, &blend_mode);
-        let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
         let screen_texture = create_screen_texture(device, window_size, msaa_samples, &stream, &targets);
-        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, stream, screen_texture, targets, color_states, window_size};
+        let color_states = create_color_target_states(&targets, &blend_mode, msaa_samples, &screen_texture);
+        let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
+        let inner = InnerP { pipeline, bind_groups, layouts, program, blend_mode, primitive, msaa_samples, stream, screen_texture, targets, window_size};
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -42,34 +42,35 @@ impl Pipeline {
         if actual.zip(expected).all(|(g1, g2)| g1 == *g2) { return; }
         let actual = self.program.latest_generations().collect();
 
-        let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, self.msaa_samples, &self.color_states);
+        let color_states = create_color_target_states(&self.targets, &self.blend_mode, self.msaa_samples, &self.screen_texture);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &self.layouts, self.msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
-        inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
         inner.program.seen_generations = actual;
         inner.window_size = window_size;
     }
 
     pub fn set_msaa_samples(&self, device: &wgpu::Device, msaa_samples: u32) {
-        let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, msaa_samples, &self.color_states);
         let screen_texture = create_screen_texture(device, self.window_size, msaa_samples, &self.stream, &self.targets);
+        let color_states = create_color_target_states(&self.targets, &self.blend_mode, msaa_samples, &screen_texture);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &self.layouts, msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
-        inner.bind_groups = bind_groups;
+        inner.screen_texture = screen_texture;
         inner.pipeline = pipeline;
         inner.msaa_samples = msaa_samples;
-        inner.screen_texture = screen_texture;
     }
 
     pub fn set_stream(&self, device: &wgpu::Device, stream: Option<crate::Stream>) {
         let screen_texture = create_screen_texture(device, self.window_size, self.msaa_samples, &stream, &self.targets);
+        let color_states = create_color_target_states(&self.targets, &self.blend_mode, self.msaa_samples, &screen_texture);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &self.layouts, self.msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
         inner.screen_texture = screen_texture;
         inner.stream = stream;
+        inner.pipeline = pipeline;
     }
 }
 
@@ -116,8 +117,16 @@ fn next(binding_id: &mut u32) {
     *binding_id %= BINDINGS_PER_GROUP as u32;
 }
 
-fn create_color_target_states(targets: &[crate::Target], blend_mode: &crate::BlendMode) -> Vec<wgpu::ColorTargetState> {
-    targets.iter().map(|t| blend_mode.state(t.format())).collect::<Vec<_>>()
+fn create_color_target_states(targets: &[crate::Target], blend_mode: &crate::BlendMode, msaa_samples: u32, screen_texture: &Option<crate::Texture>) -> Vec<wgpu::ColorTargetState> {
+    let mut color_target_states = targets.iter().map(|t| blend_mode.state(t.format())).collect::<Vec<_>>();
+
+    if let Some(texture) = screen_texture {
+        if msaa_samples == 1 {
+            color_target_states.push(blend_mode.state(texture.format));
+        }
+    }
+
+    color_target_states
 }
 
 fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], msaa_samples: u32, color_states: &[wgpu::ColorTargetState]) -> wgpu::RenderPipeline {
