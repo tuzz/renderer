@@ -86,8 +86,8 @@ fn main() {
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
     // TODO: explain
-    let stream = Some(renderer.stream());
-    renderer.set_stream(&pipeline, stream);
+    let capture_stream = Some(renderer.capture_stream());
+    renderer.set_capture_stream(&pipeline, capture_stream);
 
     // Set the start position of each quad and its velocity in the x, y directions.
     let mut x1 = (0.3, 0.015);

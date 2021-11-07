@@ -3,7 +3,7 @@ use std::{future::Future, task::Context, task::Poll};
 use futures::FutureExt;
 use noop_waker::noop_waker;
 
-pub struct Stream {
+pub struct CaptureStream {
     stream_buffers: rc::Rc<cell::RefCell<VecDeque<StreamBuffer>>>,
 }
 
@@ -16,7 +16,7 @@ pub struct StreamBuffer {
     map_future: Option<pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>>
 }
 
-impl Stream {
+impl CaptureStream {
     pub fn new() -> Self {
         Self { stream_buffers: rc::Rc::new(cell::RefCell::new(VecDeque::new())) }
     }

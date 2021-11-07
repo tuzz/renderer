@@ -18,7 +18,7 @@ pub struct InnerR {
     pub swap_chain: wgpu::SwapChain,
     pub frame: Option<wgpu::SwapChainFrame>,
     pub commands: Vec<wgpu::CommandBuffer>,
-    pub stream: Option<crate::Stream>,
+    pub stream: Option<crate::CaptureStream>,
 }
 
 impl Renderer {
@@ -157,13 +157,13 @@ impl Renderer {
         pipeline.set_msaa_samples(&self.device, msaa_samples);
     }
 
-    pub fn set_stream(&self, pipeline: &crate::Pipeline, stream: Option<crate::Stream>) {
+    pub fn set_capture_stream(&self, pipeline: &crate::Pipeline, stream: Option<crate::CaptureStream>) {
         self.inner.borrow_mut().stream = stream;
         pipeline.set_streaming(&self.device, self.stream.is_some());
     }
 
-    pub fn stream(&self) -> crate::Stream { // TODO: pass in a processing closure
-        crate::Stream::new()
+    pub fn capture_stream(&self) -> crate::CaptureStream { // TODO: pass in a processing closure
+        crate::CaptureStream::new()
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
