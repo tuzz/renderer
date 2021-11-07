@@ -168,7 +168,7 @@ fn primitive_state(primitive: &crate::Primitive) -> wgpu::PrimitiveState {
         topology: primitive.topology(),
         strip_index_format: None,
         front_face: wgpu::FrontFace::default(),
-        cull_mode: None,
+        cull_mode: wgpu::CullMode::None,
         polygon_mode: wgpu::PolygonMode::default(),
     }
 }

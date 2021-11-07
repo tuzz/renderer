@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 bytemuck = "1.4"
 futures = "0.3"
-wgpu = { git = "https://github.com/gfx-rs/wgpu-rs" }
+wgpu = "0.7.1"
 winit = "0.25"
 
 [dependencies.shaderc]
