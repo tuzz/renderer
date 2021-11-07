@@ -37,8 +37,18 @@ impl<'a> RenderPass<'a> {
         }
 
         render_pass.draw(0..vertices_per_instance, 0..instance_count);
-
         drop(render_pass);
+
+        if let Some(stream) = &pipeline.stream {
+            let texture = pipeline.screen_texture.as_ref().unwrap();
+
+            encoder.copy_texture_to_buffer(
+                texture.texture_copy_view((0, 0)),
+                stream.buffer_copy_view(),
+                texture.extent(),
+            );
+        };
+
         encoder.finish()
     }
 

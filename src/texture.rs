@@ -57,6 +57,14 @@ impl Texture {
         (binding, layout)
     }
 
+    pub fn texture_copy_view(&self, offset: (u32, u32)) -> wgpu::TextureCopyView {
+        texture_copy_view(&self.texture, offset)
+    }
+
+    pub fn extent(&self) -> wgpu::Extent3d {
+        extent(self.size)
+    }
+
     pub fn sampler_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
         let layout = self.sampler_binding_layout(id, visibility);
         let binding = sampler_binding(id, self.sampler.as_ref().unwrap());
