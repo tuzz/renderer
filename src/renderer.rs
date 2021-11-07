@@ -147,18 +147,20 @@ impl Renderer {
     }
 
     pub fn set_msaa_samples(&self, pipeline: &crate::Pipeline, msaa_samples: u32) {
-        let window_size = (self.window_size.width, self.window_size.height);
+        pipeline.set_msaa_samples(&self.device, msaa_samples);
+    }
 
-        pipeline.set_msaa_samples(&self.device, window_size, msaa_samples);
+    pub fn set_stream(&self, pipeline: &crate::Pipeline, stream: Option<crate::Stream>) {
+        pipeline.set_stream(&self.device, stream);
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
         self.adapter.get_info()
     }
 
-    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> crate::Pipeline {
+    pub fn pipeline(&self, program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, stream: Option<crate::Stream>, targets: Vec<crate::Target>) -> crate::Pipeline {
         let window_size = (self.window_size.width, self.window_size.height);
-        crate::Pipeline::new(&self.device, window_size, program, blend_mode, primitive, msaa_samples, targets)
+        crate::Pipeline::new(&self.device, window_size, program, blend_mode, primitive, msaa_samples, stream, targets)
     }
 
     pub fn attribute(&self, location: usize, size: u32) -> crate::Attribute {

@@ -11,9 +11,11 @@ pub struct InnerP {
     pub blend_mode: crate::BlendMode,
     pub primitive: crate::Primitive,
     pub msaa_samples: u32,
+    pub stream: Option<crate::Stream>,
     pub screen_texture: Option<crate::Texture>,
     pub targets: Vec<crate::Target>,
     pub color_states: Vec<wgpu::ColorTargetState>,
+    pub window_size: (u32, u32),
 }
 
 // At time of writing, wgpu limits the number of bind group sets to 8 and the
@@ -21,12 +23,12 @@ pub struct InnerP {
 pub const BINDINGS_PER_GROUP: usize = 4;
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> Self {
+    pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, stream: Option<crate::Stream>, targets: Vec<crate::Target>) -> Self {
         let (bind_groups, layouts) = create_bind_groups(device, &program);
         let color_states = create_color_target_states(&targets, &blend_mode);
         let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
-        let screen_texture = create_screen_texture(device, window_size, msaa_samples, &targets);
-        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, screen_texture, targets, color_states };
+        let screen_texture = create_screen_texture(device, window_size, msaa_samples, &stream, &targets);
+        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, stream, screen_texture, targets, color_states, window_size};
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -47,18 +49,27 @@ impl Pipeline {
         inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
         inner.program.seen_generations = actual;
+        inner.window_size = window_size;
     }
 
-    pub fn set_msaa_samples(&self, device: &wgpu::Device, window_size: (u32, u32), msaa_samples: u32) {
+    pub fn set_msaa_samples(&self, device: &wgpu::Device, msaa_samples: u32) {
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
         let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, msaa_samples, &self.color_states);
-        let screen_texture = create_screen_texture(device, window_size, msaa_samples, &self.targets);
+        let screen_texture = create_screen_texture(device, self.window_size, msaa_samples, &self.stream, &self.targets);
 
         let mut inner = self.inner.borrow_mut();
         inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
         inner.msaa_samples = msaa_samples;
         inner.screen_texture = screen_texture;
+    }
+
+    pub fn set_stream(&self, device: &wgpu::Device, stream: Option<crate::Stream>) {
+        let screen_texture = create_screen_texture(device, self.window_size, self.msaa_samples, &stream, &self.targets);
+
+        let mut inner = self.inner.borrow_mut();
+        inner.screen_texture = screen_texture;
+        inner.stream = stream;
     }
 }
 
@@ -128,8 +139,8 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, primi
     device.create_render_pipeline(&descriptor)
 }
 
-fn create_screen_texture(device: &wgpu::Device, window_size: (u32, u32), msaa_samples: u32, targets: &[crate::Target]) -> Option<crate::Texture> {
-    if msaa_samples == 1 { return None; }
+fn create_screen_texture(device: &wgpu::Device, window_size: (u32, u32), msaa_samples: u32, stream: &Option<crate::Stream>, targets: &[crate::Target]) -> Option<crate::Texture> {
+    if msaa_samples == 1 && stream.is_none() { return None; }
 
     // If there are multiple render targets, configure the screen texture based on the first one.
     let target = &targets[0];
@@ -144,7 +155,7 @@ fn create_screen_texture(device: &wgpu::Device, window_size: (u32, u32), msaa_sa
 }
 
 fn resize_screen_texture(pipeline: &Pipeline, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
-    if pipeline.msaa_samples == 1 { return; }
+    if pipeline.msaa_samples == 1 && pipeline.stream.is_none() { return; }
 
     let target = &targets[0];
     let new_size = target.size(window_size);
