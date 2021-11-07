@@ -1,8 +1,10 @@
-use std::future::Future;
-use std::{rc, cell};
+use std::{collections::VecDeque, rc, cell, pin};
+use std::{future::Future, task::Context, task::Poll};
+use futures::FutureExt;
+use noop_waker::noop_waker;
 
 pub struct Stream {
-    stream_buffers: rc::Rc<cell::RefCell<Vec<StreamBuffer>>>,
+    stream_buffers: rc::Rc<cell::RefCell<VecDeque<StreamBuffer>>>,
 }
 
 pub struct StreamBuffer {
@@ -11,12 +13,12 @@ pub struct StreamBuffer {
     height: u32,
     bytes_per_row: u32,
     row_padding: u32,
-    map_future: Option<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>,
+    map_future: Option<pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>>
 }
 
 impl Stream {
     pub fn new() -> Self {
-        Self { stream_buffers: rc::Rc::new(cell::RefCell::new(vec![])) }
+        Self { stream_buffers: rc::Rc::new(cell::RefCell::new(VecDeque::new())) }
     }
 
     pub fn create_buffer(&self, device: &wgpu::Device, texture: &crate::Texture) {
@@ -34,14 +36,14 @@ impl Stream {
         let descriptor = wgpu::BufferDescriptor { label: None, size, usage, mapped_at_creation: false };
         let buffer = device.create_buffer(&descriptor);
 
-        let mut vec = self.stream_buffers.borrow_mut();
-        vec.push(StreamBuffer { buffer, width, height, bytes_per_row, row_padding, map_future: None });
+        let mut queue = self.stream_buffers.borrow_mut();
+        queue.push_back(StreamBuffer { buffer, width, height, bytes_per_row, row_padding, map_future: None });
     }
 
     pub fn copy_texture_to_buffer(&self, encoder: &mut wgpu::CommandEncoder, texture: &crate::Texture) {
-        let vec = self.stream_buffers.borrow_mut();
+        let queue = self.stream_buffers.borrow_mut();
 
-        let stream_buffer = vec.last().unwrap();
+        let stream_buffer = queue.back().unwrap();
         let texture_copy_view = texture.texture_copy_view((0, 0));
 
         let buffer_copy_view = wgpu::BufferCopyView {
@@ -58,10 +60,41 @@ impl Stream {
 
     pub fn initiate_buffer_mapping(&mut self) {
         for stream_buffer in self.stream_buffers.borrow_mut().iter_mut() {
+            if stream_buffer.map_future.is_some() { continue; }
+
             let slice = stream_buffer.buffer.slice(..);
             let future = slice.map_async(wgpu::MapMode::Read);
 
-            stream_buffer.map_future = Some(Box::new(future));
+            stream_buffer.map_future = Some(future.boxed());
+        }
+    }
+
+    pub fn process_mapped_buffers(&mut self) {
+        let mut queue = self.stream_buffers.borrow_mut();
+
+        loop {
+            if queue.is_empty() { break; }
+
+            let stream_buffer = &mut queue[0];
+            let future = stream_buffer.map_future.as_mut().unwrap();
+
+            let waker = noop_waker();
+            let mut context = Context::from_waker(&waker);
+
+            match future.as_mut().poll(&mut context) {
+                Poll::Pending => break,
+                Poll::Ready(result) => {
+                    result.unwrap(); // Panic if mapping failed.
+
+                    let slice = stream_buffer.buffer.slice(..);
+                    let padded_data = slice.get_mapped_range();
+
+                    println!("{:?}, {}", padded_data.first(), padded_data.len());
+
+                    drop(padded_data);
+                    queue.pop_front();
+                },
+            }
         }
     }
 }

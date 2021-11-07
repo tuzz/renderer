@@ -73,9 +73,6 @@ fn main() {
     // When samples is set to 1, MSAA is switched off completely, incurring no overhead.
     let msaa_samples = 1;
 
-    // TODO: explain
-    let stream = Some(renderer.stream());
-
     // We're going to render to the screen but you _could_ render to a texture, too.
     let target = renderer.screen_target();
 
@@ -87,6 +84,10 @@ fn main() {
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
+
+    // TODO: explain
+    let stream = Some(renderer.stream());
+    renderer.set_stream(&pipeline, stream);
 
     // Set the start position of each quad and its velocity in the x, y directions.
     let mut x1 = (0.3, 0.015);

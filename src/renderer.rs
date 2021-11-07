@@ -97,6 +97,7 @@ impl Renderer {
 
         if let Some(stream) = &mut self.inner.borrow_mut().stream {
             stream.initiate_buffer_mapping();
+            stream.process_mapped_buffers();
         }
     }
 
