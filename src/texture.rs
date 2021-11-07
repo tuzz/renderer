@@ -14,16 +14,17 @@ pub struct InnerT {
     pub format: crate::Format,
     pub msaa_samples: u32,
     pub renderable: bool,
+    pub copyable: bool,
     pub generation: u32,
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, msaa_samples: u32, renderable: bool, with_sampler: bool) -> Self {
-        let texture = create_texture(device, size, &format, msaa_samples, renderable);
+    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, msaa_samples: u32, renderable: bool, copyable: bool, with_sampler: bool) -> Self {
+        let texture = create_texture(device, size, &format, msaa_samples, renderable, copyable);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = if with_sampler { Some(create_sampler(device, filter_mode)) } else { None };
-        let inner = InnerT { texture, view, sampler, size, format, msaa_samples, filter_mode, renderable, generation: 0 };
+        let inner = InnerT { texture, view, sampler, size, format, msaa_samples, filter_mode, renderable, copyable, generation: 0 };
 
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
@@ -34,7 +35,7 @@ impl Texture {
 
         let mut inner = self.inner.borrow_mut();
         inner.size = new_size;
-        inner.texture = create_texture(device, inner.size, &inner.format, inner.msaa_samples, inner.renderable);
+        inner.texture = create_texture(device, inner.size, &inner.format, inner.msaa_samples, inner.renderable, inner.copyable);
         inner.view = inner.texture.create_view(&wgpu::TextureViewDescriptor::default());
         inner.generation += 1;
     }
@@ -83,9 +84,11 @@ impl Texture {
     }
 }
 
-fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, msaa_samples: u32, renderable: bool) -> wgpu::Texture {
+fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, msaa_samples: u32, renderable: bool, copyable: bool) -> wgpu::Texture {
     let mut usage = wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST;
+
     if renderable { usage |= wgpu::TextureUsage::RENDER_ATTACHMENT; }
+    if copyable { usage |= wgpu::TextureUsage::COPY_SRC; }
 
     let descriptor = wgpu::TextureDescriptor {
         size: extent(size),

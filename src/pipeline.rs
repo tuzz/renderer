@@ -149,9 +149,10 @@ fn create_screen_texture(device: &wgpu::Device, window_size: (u32, u32), msaa_sa
     let filter_mode = crate::FilterMode::Nearest; // Not used
     let format = target.format();
     let renderable = true;
+    let copyable = stream.is_some();
     let with_sampler = false;
 
-    Some(crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, with_sampler))
+    Some(crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, copyable, with_sampler))
 }
 
 fn resize_screen_texture(pipeline: &Pipeline, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {

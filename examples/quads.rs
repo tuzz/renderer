@@ -40,8 +40,8 @@ fn main() {
     // The x, y offset for all vertices of each instanced quad.
     let i_offset = renderer.instanced();
 
-    // The texture binding for the fragment shader (renderable=false, with_sampler=true).
-    let t_texture = renderer.texture(width, height, filter, format, false, true);
+    // The texture binding for the fragment shader (renderable=false, copyable=false, with_sampler=true).
+    let t_texture = renderer.texture(width, height, filter, format, false, false, true);
 
     // Create a shader program with some attributes, instanced attributes,
     // uniforms and textures. The attributes are indexed separately and the rest
