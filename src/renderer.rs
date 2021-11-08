@@ -157,13 +157,9 @@ impl Renderer {
         pipeline.set_msaa_samples(&self.device, msaa_samples);
     }
 
-    pub fn set_capture_stream(&self, pipeline: &crate::Pipeline, stream: Option<crate::CaptureStream>) {
-        self.inner.borrow_mut().stream = stream;
+    pub fn set_capture_stream(&self, pipeline: &crate::Pipeline, process_function: Option<Box<dyn FnMut(crate::StreamBuffer)>>) {
+        self.inner.borrow_mut().stream = process_function.map(|p| crate::CaptureStream::new(p));
         pipeline.set_streaming(&self.device, self.stream.is_some());
-    }
-
-    pub fn capture_stream(&self) -> crate::CaptureStream { // TODO: pass in a processing closure
-        crate::CaptureStream::new()
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {

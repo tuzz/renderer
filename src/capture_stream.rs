@@ -4,21 +4,26 @@ use futures::FutureExt;
 use noop_waker::noop_waker;
 
 pub struct CaptureStream {
-    stream_buffers: rc::Rc<cell::RefCell<VecDeque<StreamBuffer>>>,
+    pub process_function: Box<dyn FnMut(StreamBuffer)>,
+    pub stream_buffers: rc::Rc<cell::RefCell<VecDeque<StreamBuffer>>>,
 }
 
 pub struct StreamBuffer {
-    buffer: wgpu::Buffer,
-    width: u32,
-    height: u32,
-    bytes_per_row: u32,
-    row_padding: u32,
+    pub buffer: wgpu::Buffer,
+    pub width: u32,
+    pub height: u32,
+    pub bytes_per_row: u32,
+    pub row_padding: u32,
+    pub size_in_bytes: u64,
+
     map_future: Option<pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>>
 }
 
 impl CaptureStream {
-    pub fn new() -> Self {
-        Self { stream_buffers: rc::Rc::new(cell::RefCell::new(VecDeque::new())) }
+    pub fn new(process_function: Box<dyn FnMut(StreamBuffer)>) -> Self {
+        let stream_buffers = rc::Rc::new(cell::RefCell::new(VecDeque::new()));
+
+        Self { process_function, stream_buffers }
     }
 
     pub fn create_buffer(&self, device: &wgpu::Device, texture: &crate::Texture) {
@@ -30,14 +35,14 @@ impl CaptureStream {
         let row_padding = (alignment - num_bytes % alignment) % alignment;
         let bytes_per_row = num_bytes + row_padding;
 
-        let size = (bytes_per_row * height) as u64;
+        let size_in_bytes = (bytes_per_row * height) as u64;
         let usage =  wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ;
 
-        let descriptor = wgpu::BufferDescriptor { label: None, size, usage, mapped_at_creation: false };
+        let descriptor = wgpu::BufferDescriptor { label: None, size: size_in_bytes, usage, mapped_at_creation: false };
         let buffer = device.create_buffer(&descriptor);
 
         let mut queue = self.stream_buffers.borrow_mut();
-        queue.push_back(StreamBuffer { buffer, width, height, bytes_per_row, row_padding, map_future: None });
+        queue.push_back(StreamBuffer { buffer, width, height, bytes_per_row, row_padding, size_in_bytes, map_future: None });
     }
 
     pub fn copy_texture_to_buffer(&self, encoder: &mut wgpu::CommandEncoder, texture: &crate::Texture) {
@@ -86,13 +91,8 @@ impl CaptureStream {
                 Poll::Ready(result) => {
                     result.unwrap(); // Panic if mapping failed.
 
-                    let slice = stream_buffer.buffer.slice(..);
-                    let padded_data = slice.get_mapped_range();
-
-                    println!("{:?}, {}", padded_data.first(), padded_data.len());
-
-                    drop(padded_data);
-                    queue.pop_front();
+                    let stream_buffer = queue.pop_front().unwrap();
+                    (self.process_function)(stream_buffer);
                 },
             }
         }
