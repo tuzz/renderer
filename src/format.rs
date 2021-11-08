@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Format {
     RU8,
     BgraU8,

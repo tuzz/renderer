@@ -57,8 +57,12 @@ impl Texture {
         (binding, layout)
     }
 
-    pub fn texture_copy_view(&self, offset: (u32, u32)) -> wgpu::TextureCopyView {
-        texture_copy_view(&self.texture, offset)
+    pub fn texture_copy_view(&self) -> wgpu::TextureCopyView {
+        texture_copy_view(&self.texture, (0, 0))
+    }
+
+    pub fn texture_data_layout(&self) -> wgpu::TextureDataLayout {
+        texture_data_layout(&self.format, self.size)
     }
 
     pub fn extent(&self) -> wgpu::Extent3d {

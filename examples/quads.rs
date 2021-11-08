@@ -85,8 +85,9 @@ fn main() {
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
-    renderer.set_capture_stream(&pipeline, Some(Box::new(|stream_buffer| {
-        println!("{:?}", stream_buffer.size_in_bytes);
+    renderer.set_capture_stream(&pipeline, 200., Some(Box::new(|stream_buffer, stream_info| {
+        println!("{:?}", stream_buffer);
+        println!("{:?}", stream_info);
     })));
 
     // Set the start position of each quad and its velocity in the x, y directions.

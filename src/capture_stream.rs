@@ -1,100 +1,144 @@
-use std::{collections::VecDeque, rc, cell, pin};
+use std::{collections::VecDeque, rc, cell, pin, fmt};
 use std::{future::Future, task::Context, task::Poll};
 use futures::FutureExt;
 use noop_waker::noop_waker;
 
 pub struct CaptureStream {
-    pub process_function: Box<dyn FnMut(StreamBuffer)>,
-    pub stream_buffers: rc::Rc<cell::RefCell<VecDeque<StreamBuffer>>>,
+    pub max_buffer_size_in_bytes: usize,
+    pub process_function: Box<dyn FnMut(StreamBuffer, StreamInfo)>,
+
+    inner: rc::Rc<cell::RefCell<Inner>>,
 }
 
+pub struct Inner {
+    pub current_buffer_size_in_bytes: usize,
+    pub stream_buffers: VecDeque<StreamBuffer>,
+}
+
+#[derive(Debug)]
 pub struct StreamBuffer {
     pub buffer: wgpu::Buffer,
-    pub width: u32,
-    pub height: u32,
-    pub bytes_per_row: u32,
-    pub row_padding: u32,
-    pub size_in_bytes: u64,
+    pub format: crate::Format,
+    pub size_in_bytes: usize,
 
-    map_future: Option<pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>>
+    pub width: usize,
+    pub height: usize,
+
+    pub unpadded_bytes_per_row: usize,
+    pub padded_bytes_per_row: usize,
+
+    map_future: Option<MapFuture>,
+}
+
+#[derive(Debug)]
+pub struct StreamInfo {
+    pub number_of_frames_behind: usize,
+    pub current_buffer_size_in_bytes: usize,
+    pub max_buffer_size_in_bytes: usize,
 }
 
 impl CaptureStream {
-    pub fn new(process_function: Box<dyn FnMut(StreamBuffer)>) -> Self {
-        let stream_buffers = rc::Rc::new(cell::RefCell::new(VecDeque::new()));
+    pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamBuffer, StreamInfo)>) -> Self {
+        let inner = Inner { current_buffer_size_in_bytes: 0, stream_buffers: VecDeque::new() };
 
-        Self { process_function, stream_buffers }
+        Self { max_buffer_size_in_bytes, process_function, inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
-    pub fn create_buffer(&self, device: &wgpu::Device, texture: &crate::Texture) {
-        let (width, height) = texture.size;
+    pub fn try_create_buffer(&self, device: &wgpu::Device, texture: &crate::Texture) -> bool {
+        let width = texture.size.0 as usize;
+        let height = texture.size.1 as usize;
 
-        let num_bytes = width * texture.format.bytes_per_texel();
+        let unpadded_bytes_per_row = width * texture.format.bytes_per_texel() as usize;
 
-        let alignment = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let row_padding = (alignment - num_bytes % alignment) % alignment;
-        let bytes_per_row = num_bytes + row_padding;
+        let alignment = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+        let row_padding = (alignment - unpadded_bytes_per_row % alignment) % alignment;
 
-        let size_in_bytes = (bytes_per_row * height) as u64;
+        let padded_bytes_per_row = unpadded_bytes_per_row + row_padding;
+        let size_in_bytes = padded_bytes_per_row * height;
+
+        let mut inner = self.inner.borrow_mut();
+        let new_size = inner.current_buffer_size_in_bytes + size_in_bytes;
+
+        if new_size > self.max_buffer_size_in_bytes {
+            eprintln!("Frame dropped from CaptureStream because the maximum buffer size of {} bytes was exceeded.", self.max_buffer_size_in_bytes);
+            return false;
+        }
+
         let usage =  wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ;
+        let descriptor = wgpu::BufferDescriptor { label: None, size: size_in_bytes as u64, usage, mapped_at_creation: false };
 
-        let descriptor = wgpu::BufferDescriptor { label: None, size: size_in_bytes, usage, mapped_at_creation: false };
         let buffer = device.create_buffer(&descriptor);
+        let format = texture.format;
+        let map_future = None;
 
-        let mut queue = self.stream_buffers.borrow_mut();
-        queue.push_back(StreamBuffer { buffer, width, height, bytes_per_row, row_padding, size_in_bytes, map_future: None });
+        inner.stream_buffers.push_back(StreamBuffer { buffer, format, size_in_bytes, width, height, unpadded_bytes_per_row, padded_bytes_per_row, map_future });
+        inner.current_buffer_size_in_bytes = new_size;
+
+        true
     }
 
     pub fn copy_texture_to_buffer(&self, encoder: &mut wgpu::CommandEncoder, texture: &crate::Texture) {
-        let queue = self.stream_buffers.borrow_mut();
+        let inner = self.inner.borrow_mut();
 
-        let stream_buffer = queue.back().unwrap();
-        let texture_copy_view = texture.texture_copy_view((0, 0));
+        let stream_buffer = inner.stream_buffers.back().unwrap();
+        let texture_copy_view = texture.texture_copy_view();
 
         let buffer_copy_view = wgpu::BufferCopyView {
             buffer: &stream_buffer.buffer,
-            layout: wgpu::TextureDataLayout {
-                offset: 0,
-                bytes_per_row: stream_buffer.bytes_per_row,
-                rows_per_image: stream_buffer.height,
-            },
+            layout: texture.texture_data_layout(),
         };
 
         encoder.copy_texture_to_buffer(texture_copy_view, buffer_copy_view, texture.extent());
     }
 
     pub fn initiate_buffer_mapping(&mut self) {
-        for stream_buffer in self.stream_buffers.borrow_mut().iter_mut() {
+        for stream_buffer in self.inner.borrow_mut().stream_buffers.iter_mut() {
             if stream_buffer.map_future.is_some() { continue; }
 
             let slice = stream_buffer.buffer.slice(..);
             let future = slice.map_async(wgpu::MapMode::Read);
 
-            stream_buffer.map_future = Some(future.boxed());
+            stream_buffer.map_future = Some(MapFuture(future.boxed()));
         }
     }
 
     pub fn process_mapped_buffers(&mut self) {
-        let mut queue = self.stream_buffers.borrow_mut();
+        let mut inner = self.inner.borrow_mut();
 
         loop {
-            if queue.is_empty() { break; }
+            if inner.stream_buffers.is_empty() { break; }
 
-            let stream_buffer = &mut queue[0];
+            let stream_buffer = &mut inner.stream_buffers[0];
             let future = stream_buffer.map_future.as_mut().unwrap();
 
             let waker = noop_waker();
             let mut context = Context::from_waker(&waker);
 
-            match future.as_mut().poll(&mut context) {
+            match future.0.as_mut().poll(&mut context) {
                 Poll::Pending => break,
                 Poll::Ready(result) => {
                     result.unwrap(); // Panic if mapping failed.
 
-                    let stream_buffer = queue.pop_front().unwrap();
-                    (self.process_function)(stream_buffer);
+                    let stream_buffer = inner.stream_buffers.pop_front().unwrap();
+                    inner.current_buffer_size_in_bytes -= stream_buffer.size_in_bytes as usize;
+
+                    let stream_info = StreamInfo {
+                        number_of_frames_behind: inner.stream_buffers.len(),
+                        current_buffer_size_in_bytes: inner.current_buffer_size_in_bytes,
+                        max_buffer_size_in_bytes: self.max_buffer_size_in_bytes,
+                    };
+
+                    (self.process_function)(stream_buffer, stream_info);
                 },
             }
         }
+    }
+}
+
+struct MapFuture(pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>);
+
+impl fmt::Debug for MapFuture {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("MapFuture").finish()
     }
 }

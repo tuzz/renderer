@@ -42,8 +42,9 @@ impl<'a> RenderPass<'a> {
         if let Some(stream) = &self.renderer.stream {
             let texture = pipeline.screen_texture.as_ref().unwrap();
 
-            stream.create_buffer(&self.renderer.device, texture);
-            stream.copy_texture_to_buffer(&mut encoder, texture);
+            if stream.try_create_buffer(&self.renderer.device, texture) {
+                stream.copy_texture_to_buffer(&mut encoder, texture);
+            }
         };
 
         encoder.finish()
