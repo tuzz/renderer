@@ -6,11 +6,11 @@ pub enum Visibility {
 }
 
 impl Visibility {
-    pub fn shader_stage(&self) -> wgpu::ShaderStage {
+    pub fn shader_stage(&self) -> wgpu::ShaderStages {
         match self {
-            Self::VertexShader => wgpu::ShaderStage::VERTEX,
-            Self::FragmentShader => wgpu::ShaderStage::FRAGMENT,
-            Self::BothShaders => wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+            Self::VertexShader => wgpu::ShaderStages::VERTEX,
+            Self::FragmentShader => wgpu::ShaderStages::FRAGMENT,
+            Self::BothShaders => wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
         }
     }
 }

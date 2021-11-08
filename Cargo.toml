@@ -3,17 +3,21 @@ name = "renderer"
 version = "0.1.0"
 authors = ["Chris Patuzzo <chris@patuzzo.co.uk>"]
 edition = "2018"
+resolver = "2"
 
 [dependencies]
 bytemuck = "1.4"
 futures = "0.3"
 noop-waker = "0.1.0"
-wgpu = "0.7.1"
 winit = "0.25"
 
 [dependencies.shaderc]
 version = "0.7"
 optional = true
+
+[dependencies.wgpu]
+version = "0.11.0"
+features = ["spirv"]
 
 [features]
 shader_compilation = ["shaderc"]

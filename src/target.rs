@@ -14,7 +14,7 @@ impl Target {
 
     pub fn view<'a>(&'a self, renderer: &'a crate::Renderer) -> &'a wgpu::TextureView {
         match self {
-            crate::Target::Screen => &renderer.frame.as_ref().unwrap().output.view,
+            crate::Target::Screen => renderer.frame_view.as_ref().unwrap(),
             crate::Target::Texture(t) => &t.view,
         }
     }

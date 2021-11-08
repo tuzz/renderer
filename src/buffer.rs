@@ -8,7 +8,7 @@ pub struct Buffer {
 
 pub struct InnerB {
     pub buffer: wgpu::Buffer,
-    pub usage: wgpu::BufferUsage,
+    pub usage: wgpu::BufferUsages,
     pub size: usize,
     pub generation: u32,
 }
@@ -17,7 +17,7 @@ const INITIAL_SIZE: usize = mem::size_of::<f32>() * 16; // Enough for a mat4 uni
 const HEADROOM: usize = mem::size_of::<f32>() * 256;
 
 impl Buffer {
-    pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsage) -> Self {
+    pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsages) -> Self {
         let buffer = create_buffer(device, usage);
         let inner = InnerB { buffer, usage, size: INITIAL_SIZE, generation: 0 };
 
@@ -32,13 +32,13 @@ impl Buffer {
             let (buffer, size) = create_buffer_with_headroom(device, inner.usage, bytes);
 
             inner.buffer = buffer;
-            inner.usage |= wgpu::BufferUsage::COPY_SRC;
+            inner.usage |= wgpu::BufferUsages::COPY_SRC;
             inner.size = size;
             inner.generation += 1;
 
             None
         } else {
-            let descriptor = wgpu::util::BufferInitDescriptor { label: None, contents: bytes, usage: wgpu::BufferUsage::COPY_SRC };
+            let descriptor = wgpu::util::BufferInitDescriptor { label: None, contents: bytes, usage: wgpu::BufferUsages::COPY_SRC };
             let staging = device.create_buffer_init(&descriptor);
 
             let mut encoder = create_command_encoder(device);
@@ -53,13 +53,13 @@ impl Buffer {
     }
 }
 
-fn create_buffer(device: &wgpu::Device, usage: wgpu::BufferUsage) -> wgpu::Buffer {
+fn create_buffer(device: &wgpu::Device, usage: wgpu::BufferUsages) -> wgpu::Buffer {
     let descriptor = wgpu::BufferDescriptor { label: None, size: INITIAL_SIZE as u64, usage, mapped_at_creation: false };
 
     device.create_buffer(&descriptor)
 }
 
-fn create_buffer_with_headroom(device: &wgpu::Device, usage: wgpu::BufferUsage, bytes: &[u8]) -> (wgpu::Buffer, usize) {
+fn create_buffer_with_headroom(device: &wgpu::Device, usage: wgpu::BufferUsages, bytes: &[u8]) -> (wgpu::Buffer, usize) {
     let buffer_size = (bytes.len() + HEADROOM).next_power_of_two();
 
     let descriptor = wgpu::BufferDescriptor { label: None, size: buffer_size as u64, usage, mapped_at_creation: true };

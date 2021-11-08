@@ -15,8 +15,8 @@ pub struct InnerR {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
     pub vsync: bool,
-    pub swap_chain: wgpu::SwapChain,
-    pub frame: Option<wgpu::SwapChainFrame>,
+    pub frame: Option<wgpu::SurfaceTexture>,
+    pub frame_view: Option<wgpu::TextureView>,
     pub commands: Vec<wgpu::CommandBuffer>,
     pub stream: Option<crate::CaptureStream>,
 }
@@ -24,16 +24,19 @@ pub struct InnerR {
 impl Renderer {
     pub fn new(window: &window::Window) -> Self {
         let window_size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+        let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
         let adapter = get_adapter(&instance, &surface);
         let (device, queue) = get_device(&adapter);
         let vsync = true;
-        let swap_chain = create_swap_chain(&window_size, &surface, &device, vsync);
-        let frame = Some(swap_chain.get_current_frame().unwrap());
+
+        configure_surface(&surface, &device, &window_size, vsync);
+
+        let frame = Some(surface.get_current_texture().unwrap());
+        let frame_view = Some(frame.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default()));
         let commands = vec![];
         let stream = None;
-        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, swap_chain, frame, commands, stream };
+        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, frame, frame_view, commands, stream };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -45,7 +48,9 @@ impl Renderer {
 
         inner.window_size = *new_size;
         inner.frame = None;
-        inner.swap_chain = create_swap_chain(&new_size, &inner.surface, &inner.device, inner.vsync);
+        inner.frame_view = None;
+
+        configure_surface(&inner.surface, &inner.device, &new_size, inner.vsync);
     }
 
     pub fn resize_texture(&self, texture: &mut crate::Texture, new_size: (u32, u32)) {
@@ -79,7 +84,8 @@ impl Renderer {
 
         let mut inner = self.inner.borrow_mut();
 
-        if let Ok(frame) = inner.swap_chain.get_current_frame() {
+        if let Ok(frame) = inner.surface.get_current_texture() {
+            inner.frame_view = Some(frame.texture.create_view(&wgpu::TextureViewDescriptor::default()));
             inner.frame = Some(frame);
             true
         } else {
@@ -89,16 +95,20 @@ impl Renderer {
 
     pub fn finish_frame(&self) {
         self.flush();
-        self.inner.borrow_mut().frame = None;
+
+        let mut inner = self.inner.borrow_mut();
+
+        inner.frame.take().unwrap().present();
+        inner.frame_view = None;
+
+        if let Some(stream) = &mut inner.stream {
+            stream.initiate_buffer_mapping();
+            stream.process_mapped_buffers();
+        }
     }
 
     pub fn flush(&self) {
         self.queue.submit(self.inner.borrow_mut().commands.drain(..));
-
-        if let Some(stream) = &mut self.inner.borrow_mut().stream {
-            stream.initiate_buffer_mapping();
-            stream.process_mapped_buffers();
-        }
     }
 
     pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
@@ -150,7 +160,9 @@ impl Renderer {
 
         inner.vsync = boolean;
         inner.frame = None;
-        inner.swap_chain = create_swap_chain(&inner.window_size, &inner.surface, &inner.device, inner.vsync);
+        inner.frame_view = None;
+
+        configure_surface(&inner.surface, &inner.device, &inner.window_size, boolean);
     }
 
     pub fn set_msaa_samples(&self, pipeline: &crate::Pipeline, msaa_samples: u32) {
@@ -272,25 +284,7 @@ impl Renderer {
     }
 }
 
-fn get_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adapter {
-    let options = wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::HighPerformance,
-        compatible_surface: Some(surface)
-    };
-
-    let future = instance.request_adapter(&options);
-
-    executor::block_on(future).unwrap()
-}
-
-fn get_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
-    let descriptor = wgpu::DeviceDescriptor::default();
-    let future = adapter.request_device(&descriptor, None);
-
-    executor::block_on(future).unwrap()
-}
-
-fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surface, device: &wgpu::Device, vsync: bool) -> wgpu::SwapChain {
+fn configure_surface(surface: &wgpu::Surface, device: &wgpu::Device, window_size: &dpi::PhysicalSize<u32>, vsync: bool) {
     let format = crate::Target::Screen.format();
 
     // Mailbox might also be available for low-latency triple buffering, but
@@ -300,17 +294,39 @@ fn create_swap_chain(window_size: &dpi::PhysicalSize<u32>, surface: &wgpu::Surfa
         false => wgpu::PresentMode::Immediate,
     };
 
-    let descriptor = wgpu::SwapChainDescriptor {
+    surface.configure(device, &wgpu::SurfaceConfiguration {
         width: window_size.width,
         height: window_size.height,
-        usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: format.texture_format(),
         present_mode,
-    };
-
-    device.create_swap_chain(surface, &descriptor)
+    });
 }
 
+
+fn get_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adapter {
+    let options = wgpu::RequestAdapterOptions {
+        power_preference: wgpu::PowerPreference::HighPerformance,
+        force_fallback_adapter: false,
+        compatible_surface: Some(surface)
+    };
+
+    let future = instance.request_adapter(&options);
+
+    executor::block_on(future).unwrap()
+}
+
+fn get_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
+    let descriptor = wgpu::DeviceDescriptor {
+        label: None,
+        features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
+        limits: wgpu::Limits::downlevel_defaults(),
+    };
+
+    let future = adapter.request_device(&descriptor, None);
+
+    executor::block_on(future).unwrap()
+}
 
 fn uniform_index(index: usize, program: &crate::Program) -> usize {
     index - program.instances.len()

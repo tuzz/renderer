@@ -54,7 +54,7 @@ impl<'a> RenderPass<'a> {
         (self.renderer.window_size.width, self.renderer.window_size.height)
     }
 
-    fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachmentDescriptor<'a>> {
+    fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachment<'a>> {
         let mut attachments = targets.iter().map(|t| self.color_attachment(t.view(&self.renderer), pipeline, clear)).collect::<Vec<_>>();
 
         if let Some(texture) = &pipeline.screen_texture {
@@ -66,21 +66,21 @@ impl<'a> RenderPass<'a> {
         attachments
     }
 
-    fn color_attachment(&self, view: &'a wgpu::TextureView, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachmentDescriptor<'a> {
+    fn color_attachment(&self, texture_view: &'a wgpu::TextureView, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachment<'a> {
         let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
         let store = true;
         let ops = wgpu::Operations { load, store };
 
-        let (attachment, resolve_target) = match pipeline.msaa_samples {
-            1 => (view, None),
-            _ => (&pipeline.screen_texture.as_ref().unwrap().view, Some(view)),
+        let (view, resolve_target) = match pipeline.msaa_samples {
+            1 => (texture_view, None),
+            _ => (&pipeline.screen_texture.as_ref().unwrap().view, Some(texture_view)),
         };
 
-        wgpu::RenderPassColorAttachmentDescriptor { attachment, resolve_target, ops }
+        wgpu::RenderPassColorAttachment { view, resolve_target, ops }
     }
 }
 
-fn render_pass_descriptor<'a>(color_attachments: &'a [wgpu::RenderPassColorAttachmentDescriptor]) -> wgpu::RenderPassDescriptor<'a, 'a> {
+fn render_pass_descriptor<'a>(color_attachments: &'a [wgpu::RenderPassColorAttachment]) -> wgpu::RenderPassDescriptor<'a, 'a> {
     wgpu::RenderPassDescriptor { label: None, depth_stencil_attachment: None, color_attachments }
 }
 

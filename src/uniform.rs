@@ -7,7 +7,7 @@ pub struct Uniform {
 
 impl Uniform {
     pub fn new(device: &wgpu::Device) -> Self {
-        let usage = wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST;
+        let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
         let buffer = crate::Buffer::new(device, usage);
 
         Self { buffer }
@@ -32,6 +32,7 @@ fn uniform_binding_layout(id: u32, visibility: &crate::Visibility, buffer: &crat
 
 fn uniform_binding(id: u32, buffer: &wgpu::Buffer, size: usize) -> wgpu::BindGroupEntry {
     let size = num::NonZeroU64::new(size as u64);
+    let binding = wgpu::BufferBinding { buffer, offset: 0, size };
 
-    wgpu::BindGroupEntry { binding: id, resource: wgpu::BindingResource::Buffer { buffer, offset: 0, size } }
+    wgpu::BindGroupEntry { binding: id, resource: wgpu::BindingResource::Buffer(binding) }
 }

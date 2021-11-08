@@ -189,8 +189,10 @@ fn primitive_state(primitive: &crate::Primitive) -> wgpu::PrimitiveState {
         topology: primitive.topology(),
         strip_index_format: None,
         front_face: wgpu::FrontFace::default(),
-        cull_mode: wgpu::CullMode::None,
+        cull_mode: None,
+        clamp_depth: false,
         polygon_mode: wgpu::PolygonMode::default(),
+        conservative: false,
     }
 }
 
@@ -210,7 +212,7 @@ fn vertex_buffers(slice: &[AttributesAndSize]) -> Vec<wgpu::VertexBufferLayout> 
 
         wgpu::VertexBufferLayout {
           array_stride: stride as wgpu::BufferAddress,
-          step_mode: wgpu::InputStepMode::Vertex,
+          step_mode: wgpu::VertexStepMode::Vertex,
           attributes: descriptors,
       }
     }).collect::<Vec<_>>()

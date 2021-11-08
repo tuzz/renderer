@@ -8,7 +8,7 @@ pub struct Attribute {
 
 impl Attribute {
     pub fn new(device: &wgpu::Device, location: usize, size: u32) -> Self {
-        let usage = wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST;
+        let usage = wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST;
         let buffer = crate::Buffer::new(device, usage);
         let inner = wgpu_attribute(location as u32, size);
 
@@ -18,10 +18,10 @@ impl Attribute {
 
 fn wgpu_attribute(shader_location: u32, size: u32) -> wgpu::VertexAttribute {
     let format = match size {
-        1 => wgpu::VertexFormat::Float,
-        2 => wgpu::VertexFormat::Float2,
-        3 => wgpu::VertexFormat::Float3,
-        4 => wgpu::VertexFormat::Float4,
+        1 => wgpu::VertexFormat::Float32,
+        2 => wgpu::VertexFormat::Float32x2,
+        3 => wgpu::VertexFormat::Float32x3,
+        4 => wgpu::VertexFormat::Float32x4,
         _ => panic!("Unspported attribute size"),
     };
 

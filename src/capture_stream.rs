@@ -64,7 +64,7 @@ impl CaptureStream {
             return false;
         }
 
-        let usage =  wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::MAP_READ;
+        let usage =  wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ;
         let descriptor = wgpu::BufferDescriptor { label: None, size: size_in_bytes as u64, usage, mapped_at_creation: false };
 
         let buffer = device.create_buffer(&descriptor);
@@ -81,14 +81,14 @@ impl CaptureStream {
         let inner = self.inner.borrow_mut();
 
         let stream_buffer = inner.stream_buffers.back().unwrap();
-        let texture_copy_view = texture.texture_copy_view();
+        let image_copy = texture.image_copy_texture();
 
-        let buffer_copy_view = wgpu::BufferCopyView {
+        let buffer_copy = wgpu::ImageCopyBuffer {
             buffer: &stream_buffer.buffer,
-            layout: texture.texture_data_layout(),
+            layout: texture.image_data_layout(),
         };
 
-        encoder.copy_texture_to_buffer(texture_copy_view, buffer_copy_view, texture.extent());
+        encoder.copy_texture_to_buffer(image_copy, buffer_copy, texture.extent());
     }
 
     pub fn initiate_buffer_mapping(&mut self) {
