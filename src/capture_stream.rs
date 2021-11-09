@@ -14,6 +14,7 @@ pub struct Inner {
     current_buffer_size_in_bytes: usize,
     stream_buffers: VecDeque<StreamBuffer>,
     map_futures: VecDeque<MapFuture>,
+    frame_index: usize,
 }
 
 #[derive(Debug)]
@@ -31,14 +32,16 @@ pub struct StreamBuffer {
 
 #[derive(Debug)]
 pub struct StreamInfo {
+    pub current_frame_index: usize,
     pub number_of_frames_behind: usize,
+
     pub current_buffer_size_in_bytes: usize,
     pub max_buffer_size_in_bytes: usize,
 }
 
 impl CaptureStream {
     pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamBuffer, StreamInfo)>) -> Self {
-        let inner = Inner { current_buffer_size_in_bytes: 0, stream_buffers: VecDeque::new(), map_futures: VecDeque::new() };
+        let inner = Inner { current_buffer_size_in_bytes: 0, stream_buffers: VecDeque::new(), map_futures: VecDeque::new(), frame_index: 0 };
 
         Self { max_buffer_size_in_bytes, process_function, inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
@@ -119,16 +122,17 @@ impl CaptureStream {
 
                     let stream_buffer = inner.stream_buffers.pop_front().unwrap();
                     inner.map_futures.pop_front().unwrap();
-
                     inner.current_buffer_size_in_bytes -= stream_buffer.size_in_bytes as usize;
 
                     let stream_info = StreamInfo {
+                        current_frame_index: inner.frame_index,
                         number_of_frames_behind: inner.stream_buffers.len(),
                         current_buffer_size_in_bytes: inner.current_buffer_size_in_bytes,
                         max_buffer_size_in_bytes: self.max_buffer_size_in_bytes,
                     };
 
                     (self.process_function)(stream_buffer, stream_info);
+                    inner.frame_index += 1;
                 },
             }
         }
