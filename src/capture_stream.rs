@@ -17,7 +17,7 @@ pub struct Inner {
     stream_buffers: VecDeque<StreamFrame>,
     map_futures: VecDeque<MapFuture>,
 
-    frame_index: usize,
+    frame_number: usize,
 }
 
 #[derive(Debug)]
@@ -31,7 +31,7 @@ pub struct StreamFrame {
     pub unpadded_bytes_per_row: usize,
     pub padded_bytes_per_row: usize,
 
-    pub frame_index: usize,
+    pub frame_number: usize,
 
     pub frame_size_in_bytes: usize,
     pub buffer_size_in_bytes: Arc<AtomicUsize>,
@@ -45,7 +45,7 @@ impl CaptureStream {
             stream_buffers: VecDeque::new(),
             map_futures: VecDeque::new(),
 
-            frame_index: 0,
+            frame_number: 0,
         };
 
         Self { max_buffer_size_in_bytes, process_function, inner: rc::Rc::new(cell::RefCell::new(inner)) }
@@ -66,8 +66,12 @@ impl CaptureStream {
         let mut inner = self.inner.borrow_mut();
         let prev_size = inner.buffer_size_in_bytes.fetch_add(frame_size_in_bytes, Relaxed);
 
+        inner.frame_number += 1;
+
         if prev_size > self.max_buffer_size_in_bytes {
-            eprintln!("Frame dropped from CaptureStream because the maximum buffer size of {} bytes was exceeded.", self.max_buffer_size_in_bytes);
+            eprintln!("Frame {} dropped from CaptureStream because the maximum buffer size of {} bytes was exceeded.", inner.frame_number, self.max_buffer_size_in_bytes);
+            inner.buffer_size_in_bytes.store(prev_size, Relaxed);
+
             return false;
         }
 
@@ -76,14 +80,12 @@ impl CaptureStream {
 
         let buffer = device.create_buffer(&descriptor);
         let format = texture.format;
-        let frame_index = inner.frame_index;
+        let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
         inner.stream_buffers.push_back(StreamFrame {
-            buffer, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_index, frame_size_in_bytes, buffer_size_in_bytes
+            buffer, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
         });
-
-        inner.frame_index += 1;
 
         true
     }
