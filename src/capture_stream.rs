@@ -1,19 +1,22 @@
 use std::{collections::VecDeque, rc, cell, pin, fmt};
 use std::{future::Future, task::Context, task::Poll};
+use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 use futures::FutureExt;
 use noop_waker::noop_waker;
 
 pub struct CaptureStream {
     pub max_buffer_size_in_bytes: usize,
-    pub process_function: Box<dyn FnMut(StreamBuffer, StreamInfo)>,
+    pub process_function: Box<dyn FnMut(StreamBuffer)>,
 
     inner: rc::Rc<cell::RefCell<Inner>>,
 }
 
 pub struct Inner {
-    current_buffer_size_in_bytes: usize,
+    buffer_size_in_bytes: Arc<AtomicUsize>,
+
     stream_buffers: VecDeque<StreamBuffer>,
     map_futures: VecDeque<MapFuture>,
+
     frame_index: usize,
 }
 
@@ -21,27 +24,29 @@ pub struct Inner {
 pub struct StreamBuffer {
     pub buffer: wgpu::Buffer,
     pub format: crate::Format,
-    pub size_in_bytes: usize,
 
     pub width: usize,
     pub height: usize,
 
     pub unpadded_bytes_per_row: usize,
     pub padded_bytes_per_row: usize,
-}
 
-#[derive(Debug)]
-pub struct StreamInfo {
-    pub current_frame_index: usize,
-    pub number_of_frames_behind: usize,
+    pub frame_index: usize,
 
-    pub current_buffer_size_in_bytes: usize,
-    pub max_buffer_size_in_bytes: usize,
+    pub frame_size_in_bytes: usize,
+    pub buffer_size_in_bytes: Arc<AtomicUsize>,
 }
 
 impl CaptureStream {
-    pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamBuffer, StreamInfo)>) -> Self {
-        let inner = Inner { current_buffer_size_in_bytes: 0, stream_buffers: VecDeque::new(), map_futures: VecDeque::new(), frame_index: 0 };
+    pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamBuffer)>) -> Self {
+        let inner = Inner {
+            buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
+
+            stream_buffers: VecDeque::new(),
+            map_futures: VecDeque::new(),
+
+            frame_index: 0,
+        };
 
         Self { max_buffer_size_in_bytes, process_function, inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
@@ -56,24 +61,29 @@ impl CaptureStream {
         let row_padding = (alignment - unpadded_bytes_per_row % alignment) % alignment;
 
         let padded_bytes_per_row = unpadded_bytes_per_row + row_padding;
-        let size_in_bytes = padded_bytes_per_row * height;
+        let frame_size_in_bytes = padded_bytes_per_row * height;
 
         let mut inner = self.inner.borrow_mut();
-        let new_size = inner.current_buffer_size_in_bytes + size_in_bytes;
+        let prev_size = inner.buffer_size_in_bytes.fetch_add(frame_size_in_bytes, Relaxed);
 
-        if new_size > self.max_buffer_size_in_bytes {
+        if prev_size > self.max_buffer_size_in_bytes {
             eprintln!("Frame dropped from CaptureStream because the maximum buffer size of {} bytes was exceeded.", self.max_buffer_size_in_bytes);
             return false;
         }
 
         let usage =  wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ;
-        let descriptor = wgpu::BufferDescriptor { label: None, size: size_in_bytes as u64, usage, mapped_at_creation: false };
+        let descriptor = wgpu::BufferDescriptor { label: None, size: frame_size_in_bytes as u64, usage, mapped_at_creation: false };
 
         let buffer = device.create_buffer(&descriptor);
         let format = texture.format;
+        let frame_index = inner.frame_index;
+        let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
-        inner.stream_buffers.push_back(StreamBuffer { buffer, format, size_in_bytes, width, height, unpadded_bytes_per_row, padded_bytes_per_row });
-        inner.current_buffer_size_in_bytes = new_size;
+        inner.stream_buffers.push_back(StreamBuffer {
+            buffer, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_index, frame_size_in_bytes, buffer_size_in_bytes
+        });
+
+        inner.frame_index += 1;
 
         true
     }
@@ -122,17 +132,8 @@ impl CaptureStream {
 
                     let stream_buffer = inner.stream_buffers.pop_front().unwrap();
                     inner.map_futures.pop_front().unwrap();
-                    inner.current_buffer_size_in_bytes -= stream_buffer.size_in_bytes as usize;
 
-                    let stream_info = StreamInfo {
-                        current_frame_index: inner.frame_index,
-                        number_of_frames_behind: inner.stream_buffers.len(),
-                        current_buffer_size_in_bytes: inner.current_buffer_size_in_bytes,
-                        max_buffer_size_in_bytes: self.max_buffer_size_in_bytes,
-                    };
-
-                    (self.process_function)(stream_buffer, stream_info);
-                    inner.frame_index += 1;
+                    (self.process_function)(stream_buffer);
                 },
             }
         }
@@ -144,5 +145,11 @@ struct MapFuture(pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncErro
 impl fmt::Debug for MapFuture {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MapFuture").finish()
+    }
+}
+
+impl Drop for StreamBuffer {
+    fn drop(&mut self) {
+        self.buffer_size_in_bytes.fetch_sub(self.frame_size_in_bytes, Relaxed);
     }
 }
