@@ -6,7 +6,7 @@ use noop_waker::noop_waker;
 
 pub struct CaptureStream {
     pub max_buffer_size_in_bytes: usize,
-    pub process_function: Box<dyn FnMut(StreamBuffer)>,
+    pub process_function: Box<dyn FnMut(StreamFrame)>,
 
     inner: rc::Rc<cell::RefCell<Inner>>,
 }
@@ -14,14 +14,14 @@ pub struct CaptureStream {
 pub struct Inner {
     buffer_size_in_bytes: Arc<AtomicUsize>,
 
-    stream_buffers: VecDeque<StreamBuffer>,
+    stream_buffers: VecDeque<StreamFrame>,
     map_futures: VecDeque<MapFuture>,
 
     frame_index: usize,
 }
 
 #[derive(Debug)]
-pub struct StreamBuffer {
+pub struct StreamFrame {
     pub buffer: wgpu::Buffer,
     pub format: crate::Format,
 
@@ -38,7 +38,7 @@ pub struct StreamBuffer {
 }
 
 impl CaptureStream {
-    pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamBuffer)>) -> Self {
+    pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamFrame)>) -> Self {
         let inner = Inner {
             buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
 
@@ -79,7 +79,7 @@ impl CaptureStream {
         let frame_index = inner.frame_index;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
-        inner.stream_buffers.push_back(StreamBuffer {
+        inner.stream_buffers.push_back(StreamFrame {
             buffer, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_index, frame_size_in_bytes, buffer_size_in_bytes
         });
 
@@ -148,7 +148,7 @@ impl fmt::Debug for MapFuture {
     }
 }
 
-impl Drop for StreamBuffer {
+impl Drop for StreamFrame {
     fn drop(&mut self) {
         self.buffer_size_in_bytes.fetch_sub(self.frame_size_in_bytes, Relaxed);
     }

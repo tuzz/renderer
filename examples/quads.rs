@@ -86,23 +86,23 @@ fn main() {
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
-    renderer.set_capture_stream(&pipeline, 200., Some(Box::new(|stream_buffer, stream_info| {
-        let frame_data = stream_buffer.buffer.slice(..).get_mapped_range();
+    renderer.set_capture_stream(&pipeline, 200., Some(Box::new(|stream_frame| {
+        let frame_data = stream_frame.buffer.slice(..).get_mapped_range();
 
         let mut png_encoder = png::Encoder::new(
             std::fs::File::create("out.png").unwrap(),
-            stream_buffer.width as u32,
-            stream_buffer.height as u32,
+            stream_frame.width as u32,
+            stream_frame.height as u32,
         );
 
         png_encoder.set_depth(png::BitDepth::Eight);
         png_encoder.set_color(png::ColorType::RGBA);
 
         let mut png_writer = png_encoder.write_header().unwrap()
-            .into_stream_writer_with_size(stream_buffer.unpadded_bytes_per_row);
+            .into_stream_writer_with_size(stream_frame.unpadded_bytes_per_row);
 
-        for chunk in frame_data.chunks(stream_buffer.padded_bytes_per_row) {
-            png_writer.write_all(&chunk[..stream_buffer.unpadded_bytes_per_row]).unwrap();
+        for chunk in frame_data.chunks(stream_frame.padded_bytes_per_row) {
+            png_writer.write_all(&chunk[..stream_frame.unpadded_bytes_per_row]).unwrap();
         }
 
         png_writer.finish().unwrap();

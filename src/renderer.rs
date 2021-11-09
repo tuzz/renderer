@@ -169,7 +169,7 @@ impl Renderer {
         pipeline.set_msaa_samples(&self.device, msaa_samples);
     }
 
-    pub fn set_capture_stream(&self, pipeline: &crate::Pipeline, max_buffer_size_in_megabytes: f32, process_function: Option<Box<dyn FnMut(crate::StreamBuffer)>>) {
+    pub fn set_capture_stream(&self, pipeline: &crate::Pipeline, max_buffer_size_in_megabytes: f32, process_function: Option<Box<dyn FnMut(crate::StreamFrame)>>) {
         if let Some(p) = process_function {
             let max_size_in_bytes = max_buffer_size_in_megabytes * 1024. * 1024.;
             let stream = crate::CaptureStream::new(max_size_in_bytes as usize, p);
