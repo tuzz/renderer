@@ -40,7 +40,7 @@ impl<'a> RenderPass<'a> {
         drop(render_pass);
 
         if let Some(stream) = &self.renderer.stream {
-            let texture = pipeline.screen_texture.as_ref().unwrap();
+            let texture = pipeline.stream_texture.as_ref().unwrap();
 
             if stream.try_create_buffer(&self.renderer.device, texture) {
                 stream.copy_texture_to_buffer(&mut encoder, texture);
@@ -57,7 +57,7 @@ impl<'a> RenderPass<'a> {
     fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachment<'a>> {
         let mut attachments = targets.iter().map(|t| self.color_attachment(t.view(&self.renderer), pipeline, clear)).collect::<Vec<_>>();
 
-        if let Some(texture) = &pipeline.screen_texture {
+        if let Some(texture) = &pipeline.stream_texture {
             if pipeline.msaa_samples == 1 {
                 attachments.push(self.color_attachment(&texture.view, pipeline, clear));
             }
@@ -73,7 +73,7 @@ impl<'a> RenderPass<'a> {
 
         let (view, resolve_target) = match pipeline.msaa_samples {
             1 => (texture_view, None),
-            _ => (&pipeline.screen_texture.as_ref().unwrap().view, Some(texture_view)),
+            _ => (&pipeline.msaa_texture.as_ref().unwrap().view, Some(texture_view)),
         };
 
         wgpu::RenderPassColorAttachment { view, resolve_target, ops }

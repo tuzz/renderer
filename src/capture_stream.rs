@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, rc, cell, pin, fmt};
 use std::{future::Future, task::Context, task::Poll};
+use std::num::NonZeroU32;
 use futures::FutureExt;
 use noop_waker::noop_waker;
 
@@ -85,7 +86,7 @@ impl CaptureStream {
 
         let buffer_copy = wgpu::ImageCopyBuffer {
             buffer: &stream_buffer.buffer,
-            layout: texture.image_data_layout(),
+            layout: texture.image_data_layout(stream_buffer.padded_bytes_per_row as u32),
         };
 
         encoder.copy_texture_to_buffer(image_copy, buffer_copy, texture.extent());

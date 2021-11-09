@@ -1,4 +1,5 @@
 use winit::{event, event_loop, window};
+use std::io::Write;
 
 const A_POSITION: usize = 0;
 const A_TEX_COORD: usize = 1;
@@ -78,7 +79,7 @@ fn main() {
 
     // Build the shader pipeline based on all the configuration above.
     let pipeline = renderer.pipeline(program, blend_mode, primitive, msaa_samples, vec![target]);
-    let clear_color = renderer.clear_color(0., 0., 0., 0.);
+    let clear_color = renderer.clear_color(0., 0., 0., 1.);
 
     // Set all the data that won't change per render. Quads are made of four x, y coordinates.
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
@@ -86,8 +87,25 @@ fn main() {
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
     renderer.set_capture_stream(&pipeline, 200., Some(Box::new(|stream_buffer, stream_info| {
-        println!("{:?}", stream_buffer);
-        println!("{:?}", stream_info);
+        let frame_data = stream_buffer.buffer.slice(..).get_mapped_range();
+
+        let mut png_encoder = png::Encoder::new(
+            std::fs::File::create("out.png").unwrap(),
+            stream_buffer.width as u32,
+            stream_buffer.height as u32,
+        );
+
+        png_encoder.set_depth(png::BitDepth::Eight);
+        png_encoder.set_color(png::ColorType::RGBA);
+
+        let mut png_writer = png_encoder.write_header().unwrap()
+            .into_stream_writer_with_size(stream_buffer.unpadded_bytes_per_row);
+
+        for chunk in frame_data.chunks(stream_buffer.padded_bytes_per_row) {
+            png_writer.write_all(&chunk[..stream_buffer.unpadded_bytes_per_row]).unwrap();
+        }
+
+        png_writer.finish().unwrap();
     })));
 
     // Set the start position of each quad and its velocity in the x, y directions.

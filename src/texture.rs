@@ -43,12 +43,14 @@ impl Texture {
 
     pub fn set_data<T: bytemuck::Pod>(&self, queue: &wgpu::Queue, offset: (u32, u32), size: (u32, u32), data: &[T]) {
         let size = if size == (0, 0) { self.size } else { size };
-        let bytes = bytemuck::cast_slice(data);
+        let total_bytes = bytemuck::cast_slice(data);
 
         let texture_copy = image_copy_texture(&self.texture, offset);
-        let data_layout = image_data_layout(&self.format, size);
 
-        queue.write_texture(texture_copy, bytes, data_layout, extent(size));
+        let bytes_per_row = size.0 * self.format.bytes_per_texel();
+        let data_layout = image_data_layout(bytes_per_row);
+
+        queue.write_texture(texture_copy, total_bytes, data_layout, extent(size));
     }
 
     pub fn texture_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
@@ -62,8 +64,8 @@ impl Texture {
         image_copy_texture(&self.texture, (0, 0))
     }
 
-    pub fn image_data_layout(&self) -> wgpu::ImageDataLayout {
-        image_data_layout(&self.format, self.size)
+    pub fn image_data_layout(&self, bytes_per_row: u32) -> wgpu::ImageDataLayout {
+        image_data_layout(bytes_per_row)
     }
 
     pub fn extent(&self) -> wgpu::Extent3d {
@@ -148,11 +150,11 @@ fn image_copy_texture(texture: &wgpu::Texture, (x, y): (u32, u32)) -> wgpu::Imag
     }
 }
 
-fn image_data_layout(format: &crate::Format, (width, height): (u32, u32)) -> wgpu::ImageDataLayout {
+fn image_data_layout(bytes_per_row: u32) -> wgpu::ImageDataLayout {
     wgpu::ImageDataLayout {
         offset: 0,
-        bytes_per_row: Some(NonZeroU32::new(format.bytes_per_texel() * width).unwrap()),
-        rows_per_image: Some(NonZeroU32::new(height).unwrap()),
+        bytes_per_row: Some(NonZeroU32::new(bytes_per_row).unwrap()),
+        rows_per_image: None,
     }
 }
 

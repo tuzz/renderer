@@ -320,7 +320,7 @@ fn get_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
     let descriptor = wgpu::DeviceDescriptor {
         label: None,
         features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
-        limits: wgpu::Limits::downlevel_defaults(),
+        limits: wgpu::Limits::default(),
     };
 
     let future = adapter.request_device(&descriptor, None);
