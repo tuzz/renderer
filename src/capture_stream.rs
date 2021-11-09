@@ -1,6 +1,5 @@
 use std::{collections::VecDeque, rc, cell, pin, fmt};
 use std::{future::Future, task::Context, task::Poll};
-use std::num::NonZeroU32;
 use futures::FutureExt;
 use noop_waker::noop_waker;
 
@@ -12,8 +11,9 @@ pub struct CaptureStream {
 }
 
 pub struct Inner {
-    pub current_buffer_size_in_bytes: usize,
-    pub stream_buffers: VecDeque<StreamBuffer>,
+    current_buffer_size_in_bytes: usize,
+    stream_buffers: VecDeque<StreamBuffer>,
+    map_futures: VecDeque<MapFuture>,
 }
 
 #[derive(Debug)]
@@ -27,8 +27,6 @@ pub struct StreamBuffer {
 
     pub unpadded_bytes_per_row: usize,
     pub padded_bytes_per_row: usize,
-
-    map_future: Option<MapFuture>,
 }
 
 #[derive(Debug)]
@@ -40,7 +38,7 @@ pub struct StreamInfo {
 
 impl CaptureStream {
     pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamBuffer, StreamInfo)>) -> Self {
-        let inner = Inner { current_buffer_size_in_bytes: 0, stream_buffers: VecDeque::new() };
+        let inner = Inner { current_buffer_size_in_bytes: 0, stream_buffers: VecDeque::new(), map_futures: VecDeque::new() };
 
         Self { max_buffer_size_in_bytes, process_function, inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
@@ -70,9 +68,8 @@ impl CaptureStream {
 
         let buffer = device.create_buffer(&descriptor);
         let format = texture.format;
-        let map_future = None;
 
-        inner.stream_buffers.push_back(StreamBuffer { buffer, format, size_in_bytes, width, height, unpadded_bytes_per_row, padded_bytes_per_row, map_future });
+        inner.stream_buffers.push_back(StreamBuffer { buffer, format, size_in_bytes, width, height, unpadded_bytes_per_row, padded_bytes_per_row });
         inner.current_buffer_size_in_bytes = new_size;
 
         true
@@ -93,13 +90,15 @@ impl CaptureStream {
     }
 
     pub fn initiate_buffer_mapping(&mut self) {
-        for stream_buffer in self.inner.borrow_mut().stream_buffers.iter_mut() {
-            if stream_buffer.map_future.is_some() { continue; }
+        let mut inner = self.inner.borrow_mut();
 
-            let slice = stream_buffer.buffer.slice(..);
+        for i in 0..inner.stream_buffers.len() {
+            if inner.map_futures.get(i).is_some() { continue; }
+
+            let slice = inner.stream_buffers[i].buffer.slice(..);
             let future = slice.map_async(wgpu::MapMode::Read);
 
-            stream_buffer.map_future = Some(MapFuture(future.boxed()));
+            inner.map_futures.push_back(MapFuture(future.boxed()));
         }
     }
 
@@ -107,20 +106,20 @@ impl CaptureStream {
         let mut inner = self.inner.borrow_mut();
 
         loop {
-            if inner.stream_buffers.is_empty() { break; }
-
-            let stream_buffer = &mut inner.stream_buffers[0];
-            let future = stream_buffer.map_future.as_mut().unwrap();
+            if inner.map_futures.is_empty() { break; }
+            let map_future = &mut inner.map_futures[0];
 
             let waker = noop_waker();
             let mut context = Context::from_waker(&waker);
 
-            match future.0.as_mut().poll(&mut context) {
+            match map_future.0.as_mut().poll(&mut context) {
                 Poll::Pending => break,
                 Poll::Ready(result) => {
                     result.unwrap(); // Panic if mapping failed.
 
                     let stream_buffer = inner.stream_buffers.pop_front().unwrap();
+                    inner.map_futures.pop_front().unwrap();
+
                     inner.current_buffer_size_in_bytes -= stream_buffer.size_in_bytes as usize;
 
                     let stream_info = StreamInfo {
