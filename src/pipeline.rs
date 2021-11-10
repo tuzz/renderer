@@ -7,7 +7,6 @@ pub struct Pipeline {
 pub struct InnerP {
     pub pipeline: wgpu::RenderPipeline,
     pub bind_groups: Vec<wgpu::BindGroup>,
-    pub layouts: Vec<wgpu::BindGroupLayout>,
     pub program: crate::Program,
     pub blend_mode: crate::BlendMode,
     pub primitive: crate::Primitive,
@@ -25,14 +24,14 @@ pub const BINDINGS_PER_GROUP: usize = 4;
 
 impl Pipeline {
     pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, streaming: bool, targets: Vec<crate::Target>) -> Self {
-        let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let color_states = create_color_target_states(&targets, &blend_mode, streaming);
-
         let msaa_texture = if msaa_samples > 1 { Some(create_msaa_texture(device, window_size, &targets, msaa_samples)) } else { None };
         let stream_texture = if streaming { Some(create_stream_texture(device, window_size, &targets)) } else { None };
 
+        let (bind_groups, layouts) = create_bind_groups(device, &program);
+        let color_states = create_color_target_states(&targets, &blend_mode, streaming);
         let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
-        let inner = InnerP { pipeline, bind_groups, layouts, program, blend_mode, primitive, msaa_samples, streaming, stream_texture, msaa_texture, targets, window_size};
+
+        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, streaming, stream_texture, msaa_texture, targets, window_size};
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -46,10 +45,12 @@ impl Pipeline {
         if actual.zip(expected).all(|(g1, g2)| g1 == *g2) { return; }
         let actual = self.program.latest_generations().collect();
 
+        let (bind_groups, layouts) = create_bind_groups(device, &self.program);
         let color_states = create_color_target_states(&self.targets, &self.blend_mode, self.streaming);
-        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &self.layouts, self.msaa_samples, &color_states);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, self.msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
+        inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
         inner.program.seen_generations = actual;
         inner.window_size = window_size;
@@ -57,23 +58,29 @@ impl Pipeline {
 
     pub fn set_msaa_samples(&self, device: &wgpu::Device, msaa_samples: u32) {
         let msaa_texture = if msaa_samples > 1 { Some(create_msaa_texture(device, self.window_size, &self.targets, msaa_samples)) } else { None };
+
+        let (bind_groups, layouts) = create_bind_groups(device, &self.program);
         let color_states = create_color_target_states(&self.targets, &self.blend_mode, self.streaming);
-        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &self.layouts, msaa_samples, &color_states);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
         inner.msaa_samples = msaa_samples;
         inner.msaa_texture = msaa_texture;
+        inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
     }
 
     pub fn set_streaming(&self, device: &wgpu::Device, streaming: bool) {
         let stream_texture = if streaming { Some(create_stream_texture(device, self.window_size, &self.targets)) } else { None };
+
+        let (bind_groups, layouts) = create_bind_groups(device, &self.program);
         let color_states = create_color_target_states(&self.targets, &self.blend_mode, streaming);
-        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &self.layouts, self.msaa_samples, &color_states);
+        let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, self.msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
         inner.streaming = streaming;
         inner.stream_texture = stream_texture;
+        inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
     }
 }
