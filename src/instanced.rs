@@ -23,7 +23,7 @@ impl Instanced {
 
 fn instanced_binding_layout(id: u32, buffer: &crate::Buffer) -> wgpu::BindGroupLayoutEntry {
     let size = num::NonZeroU64::new(buffer.inner.borrow().size as u64);
-    let storage = wgpu::BufferBindingType::Storage { read_only: false };
+    let storage = wgpu::BufferBindingType::Storage { read_only: true };
 
     let ty = wgpu::BindingType::Buffer { ty: storage, has_dynamic_offset: false, min_binding_size: size };
 
