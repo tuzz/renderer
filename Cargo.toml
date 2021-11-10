@@ -2,8 +2,7 @@
 name = "renderer"
 version = "0.1.0"
 authors = ["Chris Patuzzo <chris@patuzzo.co.uk>"]
-edition = "2018"
-resolver = "2"
+edition = "2021"
 
 [dependencies]
 bytemuck = "1.4"
