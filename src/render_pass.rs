@@ -39,8 +39,8 @@ impl<'a> RenderPass<'a> {
         render_pass.draw(0..vertices_per_instance, 0..instance_count);
         drop(render_pass);
 
-        if let Some(stream) = &self.renderer.stream {
-            let texture = pipeline.stream_texture.as_ref().unwrap();
+        if let Some(texture) = &pipeline.stream_texture {
+            let stream = self.renderer.stream.as_ref().unwrap();
 
             if stream.try_create_buffer(&self.renderer.device, texture) {
                 stream.copy_texture_to_buffer(&mut encoder, texture);
@@ -58,9 +58,7 @@ impl<'a> RenderPass<'a> {
         let mut attachments = targets.iter().map(|t| self.color_attachment(t.view(&self.renderer), pipeline, clear)).collect::<Vec<_>>();
 
         if let Some(texture) = &pipeline.stream_texture {
-            if pipeline.msaa_samples == 1 {
-                attachments.push(self.color_attachment(&texture.view, pipeline, clear));
-            }
+            attachments.push(self.color_attachment(&texture.view, pipeline, clear));
         }
 
         attachments

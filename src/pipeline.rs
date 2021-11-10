@@ -23,12 +23,14 @@ pub struct InnerP {
 pub const BINDINGS_PER_GROUP: usize = 4;
 
 impl Pipeline {
-    pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, streaming: bool, targets: Vec<crate::Target>) -> Self {
+    pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> Self {
         let msaa_texture = if msaa_samples > 1 { Some(create_msaa_texture(device, window_size, &targets, msaa_samples)) } else { None };
-        let stream_texture = if streaming { Some(create_stream_texture(device, window_size, &targets)) } else { None };
+
+        let streaming = false;
+        let stream_texture = None;
 
         let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let color_states = create_color_target_states(&targets, &blend_mode, streaming);
+        let color_states = create_color_target_states(&targets, &blend_mode, false);
         let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
 
         let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, streaming, stream_texture, msaa_texture, targets, window_size};
