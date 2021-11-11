@@ -173,14 +173,22 @@ impl Renderer {
     pub fn set_capture_stream(&self, pipelines: &[&crate::Pipeline], clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::StreamFrame)>) {
         let max_size_in_bytes = (max_buffer_size_in_megabytes * 1024. * 1024.) as usize;
         let stream = crate::CaptureStream::new(&self, clear_color, max_size_in_bytes, process_function);
-
         self.inner.borrow_mut().stream = Some(stream);
-        pipelines.iter().for_each(|p| p.set_streaming(&self.device, true));
+
+        for (i, pipeline) in pipelines.iter().enumerate() {
+            let is_last = i == pipelines.len() - 1;
+            let position = if is_last { crate::StreamPosition::Last } else { crate::StreamPosition::NotLast };
+            pipeline.set_stream_position(&self.device, position);
+        }
     }
 
     pub fn clear_capture_stream(&self, pipelines: &[&crate::Pipeline]) {
         self.inner.borrow_mut().stream = None;
-        pipelines.iter().for_each(|p| p.set_streaming(&self.device, false));
+
+        for pipeline in pipelines {
+            let position = crate::StreamPosition::None;
+            pipeline.set_stream_position(&self.device, position);
+        }
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {

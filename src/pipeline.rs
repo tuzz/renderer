@@ -12,11 +12,15 @@ pub struct InnerP {
     pub primitive: crate::Primitive,
     pub msaa_samples: u32,
     pub msaa_texture: Option<crate::Texture>,
-    pub streaming: bool,
+    pub position_in_stream: StreamPosition,
     pub targets: Vec<crate::Target>,
     pub window_size: (u32, u32),
     pub seen_generations: Vec<u32>,
 }
+
+// We only want to copy the CaptureStream's texture to a buffer after the last
+// pipeline has finished. Otherwise, we'd capture all intermediate writes as well.
+pub enum StreamPosition { None, NotLast, Last }
 
 // At time of writing, wgpu limits the number of bind group sets to 8 and the
 // number of bindings per group to 4, so chunk the bindings into 4s.
@@ -25,14 +29,14 @@ pub const BINDINGS_PER_GROUP: usize = 4;
 impl Pipeline {
     pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> Self {
         let msaa_texture = if msaa_samples > 1 { Some(create_msaa_texture(device, window_size, &targets, msaa_samples)) } else { None };
+        let position_in_stream = StreamPosition::None;
 
         let (bind_groups, layouts) = create_bind_groups(device, &program);
-        let color_states = create_color_target_states(&targets, &blend_mode, false);
+        let color_states = create_color_target_states(&targets, &blend_mode, &position_in_stream);
         let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
-        let streaming = false;
         let seen_generations = program.latest_generations().collect();
 
-        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, streaming, msaa_texture, targets, window_size, seen_generations };
+        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, msaa_texture, position_in_stream, targets, window_size, seen_generations };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -47,7 +51,7 @@ impl Pipeline {
         let actual = self.program.latest_generations().collect();
 
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let color_states = create_color_target_states(&self.targets, &self.blend_mode, self.streaming);
+        let color_states = create_color_target_states(&self.targets, &self.blend_mode, &self.position_in_stream);
         let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, self.msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
@@ -61,7 +65,7 @@ impl Pipeline {
         let msaa_texture = if msaa_samples > 1 { Some(create_msaa_texture(device, self.window_size, &self.targets, msaa_samples)) } else { None };
 
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let color_states = create_color_target_states(&self.targets, &self.blend_mode, self.streaming);
+        let color_states = create_color_target_states(&self.targets, &self.blend_mode, &self.position_in_stream);
         let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
@@ -71,13 +75,13 @@ impl Pipeline {
         inner.pipeline = pipeline;
     }
 
-    pub fn set_streaming(&self, device: &wgpu::Device, streaming: bool) {
+    pub fn set_stream_position(&self, device: &wgpu::Device, position_in_stream: StreamPosition) {
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
-        let color_states = create_color_target_states(&self.targets, &self.blend_mode, streaming);
+        let color_states = create_color_target_states(&self.targets, &self.blend_mode, &position_in_stream);
         let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, self.msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
-        inner.streaming = streaming;
+        inner.position_in_stream = position_in_stream;
         inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
     }
@@ -126,11 +130,12 @@ fn next(binding_id: &mut u32) {
     *binding_id %= BINDINGS_PER_GROUP as u32;
 }
 
-fn create_color_target_states(targets: &[crate::Target], blend_mode: &crate::BlendMode, streaming: bool) -> Vec<wgpu::ColorTargetState> {
+fn create_color_target_states(targets: &[crate::Target], blend_mode: &crate::BlendMode, stream_position: &StreamPosition) -> Vec<wgpu::ColorTargetState> {
     let mut color_target_states = targets.iter().map(|t| blend_mode.state(t.format())).collect::<Vec<_>>();
 
-    if streaming {
-        color_target_states.push(blend_mode.state(crate::Format::RgbaU8));
+    match stream_position {
+        StreamPosition::None => {},
+        _ => color_target_states.push(blend_mode.state(crate::Format::RgbaU8)),
     }
 
     color_target_states
