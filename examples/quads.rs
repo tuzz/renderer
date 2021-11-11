@@ -89,29 +89,28 @@ fn main() {
     // The renderer can also capture a raw stream of video by adding f_capture_stream to your shaders.
     // The capture stream can have its own clear color and capture from a subset of the pipelines.
     // Constraint: If the pipelines write to textures, they must be the same size as the framebuffer.
-    renderer.set_capture_stream(&[&pipeline], Some(clear_color), 500., Box::new(move |stream_frame| {
-        if stream_frame.frame_number % 300 != 0 { return; } // Comment out to capture every frame.
+    renderer.set_capture_stream(&[&pipeline], Some(clear_color), 500., Box::new(move |image_data, frame_info| {
+        if frame_info.frame_number % 300 != 0 { return; } // Comment out to capture every frame.
 
-        // If the GPU memory limit (set to 500MB) is exceeded, the frame is dropped and 'buffer' is None.
-        if stream_frame.buffer.is_none() { return; }
+        // If the GPU memory limit (set to 500MB) is exceeded, the frame is dropped and image_data is None.
+        let image_data = match image_data { Some(slice) => slice, _ => return };
 
         // In practice, you'd want to do this in a separate thread. See https://github.com/tuzz/sun-stream
-        let file = std::fs::File::create(format!("frame-{}.png", stream_frame.frame_number)).unwrap();
-        let mut png = png::Encoder::new(file, stream_frame.width as u32, stream_frame.height as u32);
+        let file = std::fs::File::create(format!("frame-{}.png", frame_info.frame_number)).unwrap();
+        let mut png = png::Encoder::new(file, frame_info.width as u32, frame_info.height as u32);
 
         png.set_depth(png::BitDepth::Eight);
         png.set_color(png::ColorType::RGBA);
 
-        let mut writer = png.write_header().unwrap().into_stream_writer_with_size(stream_frame.unpadded_bytes_per_row);
-        let image_data = stream_frame.buffer.as_ref().unwrap().slice(..).get_mapped_range();
+        let mut writer = png.write_header().unwrap().into_stream_writer_with_size(frame_info.unpadded_bytes_per_row);
 
         // Skip past padding that is added to the raw image data if the width is not a multiple of 64.
-        for chunk in image_data.chunks(stream_frame.padded_bytes_per_row) {
-            writer.write_all(&chunk[..stream_frame.unpadded_bytes_per_row]).unwrap();
+        for chunk in image_data.chunks(frame_info.padded_bytes_per_row) {
+            writer.write_all(&chunk[..frame_info.unpadded_bytes_per_row]).unwrap();
         }
 
         writer.finish().unwrap();
-        println!("Captured frame {} to a png file.", stream_frame.frame_number);
+        println!("Captured frame {} to a png file.", frame_info.frame_number);
     }));
 
     // Set the start position of each quad and its velocity in the x, y directions.
