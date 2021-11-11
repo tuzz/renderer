@@ -40,7 +40,7 @@ impl<'a> RenderPass<'a> {
         render_pass.draw(0..vertices_per_instance, 0..instance_count);
         drop(render_pass);
 
-        if pipeline.streaming {
+        if let crate::StreamPosition::Last = pipeline.position_in_stream {
             let stream = self.renderer.stream.as_ref().unwrap();
 
             if stream.try_create_buffer(&self.renderer.device) {
@@ -58,8 +58,9 @@ impl<'a> RenderPass<'a> {
     fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachment<'a>> {
         let mut attachments = targets.iter().map(|t| self.color_attachment(t.view(&self.renderer), pipeline, clear)).collect::<Vec<_>>();
 
-        if pipeline.streaming {
-            attachments.push(self.renderer.stream.as_ref().unwrap().color_attachment());
+        match pipeline.position_in_stream {
+            crate::StreamPosition::None => {},
+            _ => attachments.push(self.renderer.stream.as_ref().unwrap().color_attachment()),
         }
 
         attachments
