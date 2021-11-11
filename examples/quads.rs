@@ -88,7 +88,7 @@ fn main() {
 
     // The renderer can also capture a raw stream of video by adding f_capture_stream to your shaders.
     // In practice, you'd want to do this in a separate thread. See https://github.com/tuzz/sun-stream
-    renderer.set_capture_stream(&[&pipeline], 500., Some(Box::new(|stream_frame| {
+    renderer.set_capture_stream(&[&pipeline], 500., Box::new(|stream_frame| {
         if stream_frame.frame_number % 600 != 0 { return; }
 
         let file = std::fs::File::create(format!("frame-{}.png", stream_frame.frame_number)).unwrap();
@@ -106,7 +106,7 @@ fn main() {
 
         writer.finish().unwrap();
         println!("Captured frame {} to a png file.", stream_frame.frame_number);
-    })));
+    }));
 
     // Set the start position of each quad and its velocity in the x, y directions.
     let mut x1 = (0.3, 0.015);

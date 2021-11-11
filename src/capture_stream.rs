@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, rc, cell, pin, fmt};
+use std::{collections::VecDeque, rc, cell, pin, fmt, ops};
 use std::{future::Future, task::Context, task::Poll};
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 use futures::FutureExt;
@@ -7,17 +7,17 @@ use noop_waker::noop_waker;
 pub struct CaptureStream {
     pub max_buffer_size_in_bytes: usize,
     pub process_function: Box<dyn FnMut(StreamFrame)>,
-
-    inner: rc::Rc<cell::RefCell<Inner>>,
+    pub inner: rc::Rc<cell::RefCell<Inner>>,
 }
 
 pub struct Inner {
-    buffer_size_in_bytes: Arc<AtomicUsize>,
+    pub texture: crate::Texture,
 
-    stream_buffers: VecDeque<StreamFrame>,
-    map_futures: VecDeque<MapFuture>,
+    pub buffer_size_in_bytes: Arc<AtomicUsize>,
+    pub stream_buffers: VecDeque<StreamFrame>,
+    pub map_futures: VecDeque<MapFuture>,
 
-    frame_number: usize,
+    pub frame_number: usize,
 }
 
 #[derive(Debug)]
@@ -38,24 +38,31 @@ pub struct StreamFrame {
 }
 
 impl CaptureStream {
-    pub fn new(max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamFrame)>) -> Self {
-        let inner = Inner {
-            buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
+    pub fn new(renderer: &crate::Renderer, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamFrame)>) -> Self {
+        let size = (renderer.window_size.width, renderer.window_size.height);
 
+        let inner = Inner {
+            texture: create_stream_texture(&renderer.device, size),
+            buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
             stream_buffers: VecDeque::new(),
             map_futures: VecDeque::new(),
-
             frame_number: 0,
         };
 
         Self { max_buffer_size_in_bytes, process_function, inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
-    pub fn try_create_buffer(&self, device: &wgpu::Device, texture: &crate::Texture) -> bool {
-        let width = texture.size.0 as usize;
-        let height = texture.size.1 as usize;
+    // TODO: clear color
+    //  - clear on the first render of the frame only (if clear color is present)
 
-        let unpadded_bytes_per_row = width * texture.format.bytes_per_texel() as usize;
+    pub fn try_create_buffer(&self, device: &wgpu::Device) -> bool {
+        let mut inner = self.inner.borrow_mut();
+
+        let width = inner.texture.size.0 as usize;
+        let height = inner.texture.size.1 as usize;
+        let format = inner.texture.format;
+
+        let unpadded_bytes_per_row = width * format.bytes_per_texel() as usize;
 
         let alignment = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
         let row_padding = (alignment - unpadded_bytes_per_row % alignment) % alignment;
@@ -63,7 +70,6 @@ impl CaptureStream {
         let padded_bytes_per_row = unpadded_bytes_per_row + row_padding;
         let frame_size_in_bytes = padded_bytes_per_row * height;
 
-        let mut inner = self.inner.borrow_mut();
         let prev_size = inner.buffer_size_in_bytes.fetch_add(frame_size_in_bytes, Relaxed);
 
         inner.frame_number += 1;
@@ -79,7 +85,6 @@ impl CaptureStream {
         let descriptor = wgpu::BufferDescriptor { label: None, size: frame_size_in_bytes as u64, usage, mapped_at_creation: false };
 
         let buffer = device.create_buffer(&descriptor);
-        let format = texture.format;
         let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
@@ -90,18 +95,18 @@ impl CaptureStream {
         true
     }
 
-    pub fn copy_texture_to_buffer(&self, encoder: &mut wgpu::CommandEncoder, texture: &crate::Texture) {
+    pub fn copy_texture_to_buffer(&self, encoder: &mut wgpu::CommandEncoder) {
         let inner = self.inner.borrow_mut();
 
         let stream_buffer = inner.stream_buffers.back().unwrap();
-        let image_copy = texture.image_copy_texture();
+        let image_copy = inner.texture.image_copy_texture();
 
         let buffer_copy = wgpu::ImageCopyBuffer {
             buffer: &stream_buffer.buffer,
-            layout: texture.image_data_layout(stream_buffer.padded_bytes_per_row as u32),
+            layout: inner.texture.image_data_layout(stream_buffer.padded_bytes_per_row as u32),
         };
 
-        encoder.copy_texture_to_buffer(image_copy, buffer_copy, texture.extent());
+        encoder.copy_texture_to_buffer(image_copy, buffer_copy, inner.texture.extent());
     }
 
     pub fn initiate_buffer_mapping(&mut self) {
@@ -142,7 +147,29 @@ impl CaptureStream {
     }
 }
 
-struct MapFuture(pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>);
+impl Inner {
+    pub fn color_attachment(&self) -> wgpu::RenderPassColorAttachment {
+        //let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
+        let load = wgpu::LoadOp::Load;
+        let store = true;
+        let ops = wgpu::Operations { load, store };
+
+        wgpu::RenderPassColorAttachment { view: &self.texture.view, resolve_target: None, ops }
+    }
+}
+
+fn create_stream_texture(device: &wgpu::Device, size: (u32, u32)) -> crate::Texture {
+    let filter_mode = crate::FilterMode::Nearest; // Not used
+    let format = crate::Format::RgbaU8;
+    let msaa_samples = 1;
+    let renderable = true;
+    let copyable = true;
+    let with_sampler = false;
+
+    crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, copyable, with_sampler)
+}
+
+pub struct MapFuture(pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>);
 
 impl fmt::Debug for MapFuture {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -153,5 +180,13 @@ impl fmt::Debug for MapFuture {
 impl Drop for StreamFrame {
     fn drop(&mut self) {
         self.buffer_size_in_bytes.fetch_sub(self.frame_size_in_bytes, Relaxed);
+    }
+}
+
+impl ops::Deref for CaptureStream {
+    type Target = Inner;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.inner.try_borrow_unguarded().unwrap() }
     }
 }

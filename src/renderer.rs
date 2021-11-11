@@ -169,17 +169,17 @@ impl Renderer {
         pipeline.set_msaa_samples(&self.device, msaa_samples);
     }
 
-    pub fn set_capture_stream(&self, pipelines: &[&crate::Pipeline], max_buffer_size_in_megabytes: f32, process_function: Option<Box<dyn FnMut(crate::StreamFrame)>>) {
-        if let Some(p) = process_function {
-            let max_size_in_bytes = max_buffer_size_in_megabytes * 1024. * 1024.;
-            let stream = crate::CaptureStream::new(max_size_in_bytes as usize, p);
+    pub fn set_capture_stream(&self, pipelines: &[&crate::Pipeline], max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::StreamFrame)>) {
+        let max_size_in_bytes = (max_buffer_size_in_megabytes * 1024. * 1024.) as usize;
+        let stream = crate::CaptureStream::new(&self, max_size_in_bytes, process_function);
 
-            self.inner.borrow_mut().stream = Some(stream);
-            pipelines.iter().for_each(|p| p.set_streaming(&self.device, true));
-        } else {
-            self.inner.borrow_mut().stream = None;
-            pipelines.iter().for_each(|p| p.set_streaming(&self.device, false));
-        }
+        self.inner.borrow_mut().stream = Some(stream);
+        pipelines.iter().for_each(|p| p.set_streaming(&self.device, true));
+    }
+
+    pub fn clear_capture_stream(&self, pipelines: &[&crate::Pipeline]) {
+        self.inner.borrow_mut().stream = None;
+        pipelines.iter().for_each(|p| p.set_streaming(&self.device, false));
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {

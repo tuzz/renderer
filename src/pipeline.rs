@@ -13,7 +13,6 @@ pub struct InnerP {
     pub msaa_samples: u32,
     pub msaa_texture: Option<crate::Texture>,
     pub streaming: bool,
-    pub stream_texture: Option<crate::Texture>,
     pub targets: Vec<crate::Target>,
     pub window_size: (u32, u32),
 }
@@ -26,20 +25,18 @@ impl Pipeline {
     pub fn new(device: &wgpu::Device, window_size: (u32, u32), program: crate::Program, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<crate::Target>) -> Self {
         let msaa_texture = if msaa_samples > 1 { Some(create_msaa_texture(device, window_size, &targets, msaa_samples)) } else { None };
 
-        let streaming = false;
-        let stream_texture = None;
-
         let (bind_groups, layouts) = create_bind_groups(device, &program);
         let color_states = create_color_target_states(&targets, &blend_mode, false);
         let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
+        let streaming = false;
 
-        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, streaming, stream_texture, msaa_texture, targets, window_size};
+        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, streaming, msaa_texture, targets, window_size};
 
         Self { inner: cell::RefCell::new(inner) }
     }
 
     pub fn recreate_on_buffer_or_texture_resize(&self, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
-        resize_msaa_and_stream_textures(&self, device, window_size, targets);
+        resize_msaa_texture(&self, device, window_size, targets);
 
         let actual = self.program.latest_generations();
         let expected = &self.program.seen_generations;
@@ -73,15 +70,12 @@ impl Pipeline {
     }
 
     pub fn set_streaming(&self, device: &wgpu::Device, streaming: bool) {
-        let stream_texture = if streaming { Some(create_stream_texture(device, self.window_size, &self.targets)) } else { None };
-
         let (bind_groups, layouts) = create_bind_groups(device, &self.program);
         let color_states = create_color_target_states(&self.targets, &self.blend_mode, streaming);
         let pipeline = create_render_pipeline(device, &self.program, &self.primitive, &layouts, self.msaa_samples, &color_states);
 
         let mut inner = self.inner.borrow_mut();
         inner.streaming = streaming;
-        inner.stream_texture = stream_texture;
         inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
     }
@@ -173,28 +167,15 @@ fn create_msaa_texture(device: &wgpu::Device, window_size: (u32, u32), targets: 
     crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, copyable, with_sampler)
 }
 
-fn create_stream_texture(device: &wgpu::Device, window_size: (u32, u32), targets: &[crate::Target]) -> crate::Texture {
-    let target = &targets[0];
-
-    let size = target.size(window_size);
-    let filter_mode = crate::FilterMode::Nearest; // Not used
-    let format = crate::Format::RgbaU8;
-    let msaa_samples = 1;
-    let renderable = true;
-    let copyable = true;
-    let with_sampler = false;
-
-    crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, copyable, with_sampler)
-}
-
-fn resize_msaa_and_stream_textures(pipeline: &Pipeline, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
+fn resize_msaa_texture(pipeline: &Pipeline, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
     let target = &targets[0];
     let new_size = target.size(window_size);
 
     let mut inner = pipeline.inner.borrow_mut();
 
-    if let Some(texture) = inner.msaa_texture.as_mut() { texture.resize(device, new_size); }
-    if let Some(texture) = inner.stream_texture.as_mut() { texture.resize(device, new_size); }
+    if let Some(texture) = inner.msaa_texture.as_mut() {
+        texture.resize(device, new_size);
+    }
 }
 
 fn create_layout(device: &wgpu::Device, layouts: &[wgpu::BindGroupLayout]) -> wgpu::PipelineLayout {

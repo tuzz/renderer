@@ -12,6 +12,7 @@ impl<'a> RenderPass<'a> {
 
     pub fn render(&self, targets: &[&crate::Target], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
         pipeline.recreate_on_buffer_or_texture_resize(&self.renderer.device, self.window_size(), targets);
+        self.renderer.stream.as_ref().map(|s| s.inner.borrow_mut().texture.resize(&self.renderer.device, self.window_size()));
 
         let color_attachments = self.color_attachments(targets, pipeline, clear);
         let descriptor = render_pass_descriptor(&color_attachments);
@@ -39,11 +40,11 @@ impl<'a> RenderPass<'a> {
         render_pass.draw(0..vertices_per_instance, 0..instance_count);
         drop(render_pass);
 
-        if let Some(texture) = &pipeline.stream_texture {
+        if pipeline.streaming {
             let stream = self.renderer.stream.as_ref().unwrap();
 
-            if stream.try_create_buffer(&self.renderer.device, texture) {
-                stream.copy_texture_to_buffer(&mut encoder, texture);
+            if stream.try_create_buffer(&self.renderer.device) {
+                stream.copy_texture_to_buffer(&mut encoder);
             }
         };
 
@@ -57,8 +58,8 @@ impl<'a> RenderPass<'a> {
     fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachment<'a>> {
         let mut attachments = targets.iter().map(|t| self.color_attachment(t.view(&self.renderer), pipeline, clear)).collect::<Vec<_>>();
 
-        if let Some(texture) = &pipeline.stream_texture {
-            attachments.push(self.color_attachment(&texture.view, pipeline, clear));
+        if pipeline.streaming {
+            attachments.push(self.renderer.stream.as_ref().unwrap().color_attachment());
         }
 
         attachments
