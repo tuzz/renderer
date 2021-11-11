@@ -17,14 +17,14 @@ pub struct Inner {
 
     pub buffer_size_in_bytes: Arc<AtomicUsize>,
     pub stream_buffers: VecDeque<StreamFrame>,
-    pub map_futures: VecDeque<MapFuture>,
+    pub map_futures: VecDeque<Option<MapFuture>>,
 
     pub frame_number: usize,
 }
 
 #[derive(Debug)]
 pub struct StreamFrame {
-    pub buffer: wgpu::Buffer,
+    pub buffer: Option<wgpu::Buffer>,
     pub format: crate::Format,
 
     pub width: usize,
@@ -81,7 +81,7 @@ impl CaptureStream {
         self.inner.borrow_mut().cleared_this_frame = false;
     }
 
-    pub fn try_create_buffer(&self, device: &wgpu::Device) -> bool {
+    pub fn create_buffer_if_within_memory_limit(&self, device: &wgpu::Device) {
         let mut inner = self.inner.borrow_mut();
 
         let width = inner.texture.size.0 as usize;
@@ -97,38 +97,39 @@ impl CaptureStream {
         let frame_size_in_bytes = padded_bytes_per_row * height;
 
         let prev_size = inner.buffer_size_in_bytes.fetch_add(frame_size_in_bytes, Relaxed);
+        let should_drop_frame = prev_size > self.max_buffer_size_in_bytes;
 
+        let buffer = if should_drop_frame {
+            inner.buffer_size_in_bytes.store(prev_size, Relaxed); // Revert
+            None
+        } else {
+            let usage =  wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ;
+            let descriptor = wgpu::BufferDescriptor { label: None, size: frame_size_in_bytes as u64, usage, mapped_at_creation: false };
+
+            Some(device.create_buffer(&descriptor))
+        };
+
+        // The frame number is incremented regardless of whether the frame is dropped.
         inner.frame_number += 1;
 
-        if prev_size > self.max_buffer_size_in_bytes {
-            eprintln!("Frame {} dropped from CaptureStream because the maximum buffer size of {} bytes was exceeded.", inner.frame_number, self.max_buffer_size_in_bytes);
-            inner.buffer_size_in_bytes.store(prev_size, Relaxed);
-
-            return false;
-        }
-
-        let usage =  wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ;
-        let descriptor = wgpu::BufferDescriptor { label: None, size: frame_size_in_bytes as u64, usage, mapped_at_creation: false };
-
-        let buffer = device.create_buffer(&descriptor);
         let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
         inner.stream_buffers.push_back(StreamFrame {
             buffer, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
         });
-
-        true
     }
 
-    pub fn copy_texture_to_buffer(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub fn copy_texture_to_buffer_if_present(&self, encoder: &mut wgpu::CommandEncoder) {
         let inner = self.inner.borrow_mut();
 
         let stream_buffer = inner.stream_buffers.back().unwrap();
+        let buffer = match &stream_buffer.buffer { Some(b) => b, _ => return };
+
         let image_copy = inner.texture.image_copy_texture();
 
         let buffer_copy = wgpu::ImageCopyBuffer {
-            buffer: &stream_buffer.buffer,
+            buffer,
             layout: inner.texture.image_data_layout(stream_buffer.padded_bytes_per_row as u32),
         };
 
@@ -140,11 +141,14 @@ impl CaptureStream {
 
         for i in 0..inner.stream_buffers.len() {
             if inner.map_futures.get(i).is_some() { continue; }
+            let stream_buffer = &inner.stream_buffers[i];
 
-            let slice = inner.stream_buffers[i].buffer.slice(..);
-            let future = slice.map_async(wgpu::MapMode::Read);
-
-            inner.map_futures.push_back(MapFuture(future.boxed()));
+            if let Some(buffer) = &stream_buffer.buffer {
+                let future = buffer.slice(..).map_async(wgpu::MapMode::Read);
+                inner.map_futures.push_back(Some(MapFuture(future.boxed())));
+            } else {
+                inner.map_futures.push_back(None);
+            }
         }
     }
 
@@ -152,9 +156,20 @@ impl CaptureStream {
         let mut inner = self.inner.borrow_mut();
 
         loop {
-            if inner.map_futures.is_empty() { break; }
-            let map_future = &mut inner.map_futures[0];
+            if inner.stream_buffers.is_empty() { break; }
+            let option = &mut inner.map_futures[0];
 
+            // If the frame was dropped, immediately call the process function.
+            // Let it decide what to do with the dropped frame.
+            if option.is_none() {
+                let stream_buffer = inner.stream_buffers.pop_front().unwrap();
+                inner.map_futures.pop_front().unwrap();
+
+                (self.process_function)(stream_buffer);
+                continue;
+            }
+
+            let map_future = option.as_mut().unwrap();
             let waker = noop_waker();
             let mut context = Context::from_waker(&waker);
 

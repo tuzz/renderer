@@ -43,9 +43,8 @@ impl<'a> RenderPass<'a> {
         if let crate::StreamPosition::Last = pipeline.position_in_stream {
             let stream = self.renderer.stream.as_ref().unwrap();
 
-            if stream.try_create_buffer(&self.renderer.device) {
-                stream.copy_texture_to_buffer(&mut encoder);
-            }
+            stream.create_buffer_if_within_memory_limit(&self.renderer.device);
+            stream.copy_texture_to_buffer_if_present(&mut encoder);
         };
 
         encoder.finish()
