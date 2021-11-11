@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, rc, cell, pin, fmt, ops};
+use std::{collections::VecDeque, rc, cell, pin, fmt};
 use std::{future::Future, task::Context, task::Poll};
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 use futures::FutureExt;
@@ -12,6 +12,8 @@ pub struct CaptureStream {
 
 pub struct Inner {
     pub texture: crate::Texture,
+    pub clear_color: Option<crate::ClearColor>,
+    pub cleared_this_frame: bool,
 
     pub buffer_size_in_bytes: Arc<AtomicUsize>,
     pub stream_buffers: VecDeque<StreamFrame>,
@@ -38,22 +40,46 @@ pub struct StreamFrame {
 }
 
 impl CaptureStream {
-    pub fn new(renderer: &crate::Renderer, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamFrame)>) -> Self {
+    pub fn new(renderer: &crate::Renderer, clear_color: Option<crate::ClearColor>, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamFrame)>) -> Self {
         let size = (renderer.window_size.width, renderer.window_size.height);
 
         let inner = Inner {
             texture: create_stream_texture(&renderer.device, size),
+            cleared_this_frame: false,
+            clear_color,
+
             buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
             stream_buffers: VecDeque::new(),
             map_futures: VecDeque::new(),
+
             frame_number: 0,
         };
 
         Self { max_buffer_size_in_bytes, process_function, inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
-    // TODO: clear color
-    //  - clear on the first render of the frame only (if clear color is present)
+    pub fn color_attachment(&self) -> wgpu::RenderPassColorAttachment {
+        let mut inner = self.inner.borrow_mut();
+
+        let load = if inner.cleared_this_frame || inner.clear_color.is_none() {
+            wgpu::LoadOp::Load
+        } else {
+            inner.cleared_this_frame = true;
+            wgpu::LoadOp::Clear(inner.clear_color.as_ref().unwrap().inner)
+        };
+
+        let store = true;
+        let ops = wgpu::Operations { load, store };
+
+        drop(inner);
+        let inner = unsafe { self.inner.try_borrow_unguarded().unwrap() };
+
+        wgpu::RenderPassColorAttachment { view: &inner.texture.view, resolve_target: None, ops }
+    }
+
+    pub fn finish_frame(&self) {
+        self.inner.borrow_mut().cleared_this_frame = false;
+    }
 
     pub fn try_create_buffer(&self, device: &wgpu::Device) -> bool {
         let mut inner = self.inner.borrow_mut();
@@ -147,17 +173,6 @@ impl CaptureStream {
     }
 }
 
-impl Inner {
-    pub fn color_attachment(&self) -> wgpu::RenderPassColorAttachment {
-        //let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
-        let load = wgpu::LoadOp::Load;
-        let store = true;
-        let ops = wgpu::Operations { load, store };
-
-        wgpu::RenderPassColorAttachment { view: &self.texture.view, resolve_target: None, ops }
-    }
-}
-
 fn create_stream_texture(device: &wgpu::Device, size: (u32, u32)) -> crate::Texture {
     let filter_mode = crate::FilterMode::Nearest; // Not used
     let format = crate::Format::RgbaU8;
@@ -180,13 +195,5 @@ impl fmt::Debug for MapFuture {
 impl Drop for StreamFrame {
     fn drop(&mut self) {
         self.buffer_size_in_bytes.fetch_sub(self.frame_size_in_bytes, Relaxed);
-    }
-}
-
-impl ops::Deref for CaptureStream {
-    type Target = Inner;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { self.inner.try_borrow_unguarded().unwrap() }
     }
 }

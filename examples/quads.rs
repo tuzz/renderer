@@ -87,10 +87,12 @@ fn main() {
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
     // The renderer can also capture a raw stream of video by adding f_capture_stream to your shaders.
-    // In practice, you'd want to do this in a separate thread. See https://github.com/tuzz/sun-stream
-    renderer.set_capture_stream(&[&pipeline], 500., Box::new(|stream_frame| {
+    // The capture stream can have its own clear color and capture from a subset of the pipelines.
+    // Constraint: If the pipelines write to textures, they must be the same size as the framebuffer.
+    renderer.set_capture_stream(&[&pipeline], Some(clear_color), 500., Box::new(|stream_frame| {
         if stream_frame.frame_number % 600 != 0 { return; }
 
+        // In practice, you'd want to do this in a separate thread. See https://github.com/tuzz/sun-stream
         let file = std::fs::File::create(format!("frame-{}.png", stream_frame.frame_number)).unwrap();
         let mut png = png::Encoder::new(file, stream_frame.width as u32, stream_frame.height as u32);
 
@@ -100,6 +102,7 @@ fn main() {
         let mut writer = png.write_header().unwrap().into_stream_writer_with_size(stream_frame.unpadded_bytes_per_row);
         let frame_data = stream_frame.buffer.slice(..).get_mapped_range();
 
+        // Skip past padding that is added to the raw image data if the width is not a multiple of 64.
         for chunk in frame_data.chunks(stream_frame.padded_bytes_per_row) {
             writer.write_all(&chunk[..stream_frame.unpadded_bytes_per_row]).unwrap();
         }

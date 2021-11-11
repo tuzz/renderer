@@ -104,6 +104,7 @@ impl Renderer {
         if let Some(stream) = &mut inner.stream {
             stream.initiate_buffer_mapping();
             stream.process_mapped_buffers();
+            stream.finish_frame();
         }
     }
 
@@ -169,9 +170,9 @@ impl Renderer {
         pipeline.set_msaa_samples(&self.device, msaa_samples);
     }
 
-    pub fn set_capture_stream(&self, pipelines: &[&crate::Pipeline], max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::StreamFrame)>) {
+    pub fn set_capture_stream(&self, pipelines: &[&crate::Pipeline], clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::StreamFrame)>) {
         let max_size_in_bytes = (max_buffer_size_in_megabytes * 1024. * 1024.) as usize;
-        let stream = crate::CaptureStream::new(&self, max_size_in_bytes, process_function);
+        let stream = crate::CaptureStream::new(&self, clear_color, max_size_in_bytes, process_function);
 
         self.inner.borrow_mut().stream = Some(stream);
         pipelines.iter().for_each(|p| p.set_streaming(&self.device, true));
