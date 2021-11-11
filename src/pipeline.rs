@@ -15,6 +15,7 @@ pub struct InnerP {
     pub streaming: bool,
     pub targets: Vec<crate::Target>,
     pub window_size: (u32, u32),
+    pub seen_generations: Vec<u32>,
 }
 
 // At time of writing, wgpu limits the number of bind group sets to 8 and the
@@ -29,8 +30,9 @@ impl Pipeline {
         let color_states = create_color_target_states(&targets, &blend_mode, false);
         let pipeline = create_render_pipeline(device, &program, &primitive, &layouts, msaa_samples, &color_states);
         let streaming = false;
+        let seen_generations = program.latest_generations().collect();
 
-        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, streaming, msaa_texture, targets, window_size};
+        let inner = InnerP { pipeline, bind_groups, program, blend_mode, primitive, msaa_samples, streaming, msaa_texture, targets, window_size, seen_generations };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -39,7 +41,7 @@ impl Pipeline {
         resize_msaa_texture(&self, device, window_size, targets);
 
         let actual = self.program.latest_generations();
-        let expected = &self.program.seen_generations;
+        let expected = &self.seen_generations;
 
         if actual.zip(expected).all(|(g1, g2)| g1 == *g2) { return; }
         let actual = self.program.latest_generations().collect();
@@ -51,8 +53,8 @@ impl Pipeline {
         let mut inner = self.inner.borrow_mut();
         inner.bind_groups = bind_groups;
         inner.pipeline = pipeline;
-        inner.program.seen_generations = actual;
         inner.window_size = window_size;
+        inner.seen_generations = actual;
     }
 
     pub fn set_msaa_samples(&self, device: &wgpu::Device, msaa_samples: u32) {
