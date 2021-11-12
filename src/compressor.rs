@@ -1,4 +1,5 @@
-use std::{fs, thread, time, io::Write, mem};
+use std::{mem, fs, thread, time, io::{Write, BufWriter}};
+use chrono::{SecondsFormat, Utc};
 use crossbeam_channel::{Sender, Receiver};
 use lzzzz::lz4f;
 
@@ -56,7 +57,7 @@ impl Drop for Compressor {
 }
 
 fn generate_timestamp() -> String {
-    chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true).replace(":", "_")
+    Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true).replace(":", "_")
 }
 
 // If max_frames_queued is set, create a bounded queue that blocks the main
@@ -79,7 +80,7 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
     let encode_config = encoding_config();
 
     let file = fs::File::create(format!("{}/{}--{}.sz", directory, timestamp, i)).unwrap();
-    let mut writer = lz4f::WriteCompressor::new(file, compress_config).unwrap();
+    let mut writer = lz4f::WriteCompressor::new(BufWriter::new(file), compress_config).unwrap();
 
     let u64_len = mem::size_of::<u64>() as u64;
 
@@ -119,7 +120,7 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
     })
 }
 
-type Writer = lz4f::WriteCompressor::<fs::File>;
+type Writer = lz4f::WriteCompressor::<BufWriter<fs::File>>;
 
 fn compression_config(lz4_compression_level: u8) -> lz4f::Preferences {
     lz4f::PreferencesBuilder::new()
