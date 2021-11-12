@@ -1,4 +1,4 @@
-use std::{fs, thread, time, io::Write};
+use std::{fs, thread, time, io::Write, mem};
 use crossbeam_channel::{Sender, Receiver};
 use lzzzz::lz4f;
 
@@ -38,7 +38,7 @@ impl Compressor {
             thread::sleep(time::Duration::from_millis(10));
         }
 
-        // Disconnect the channel so that the workers threads break.
+        // Disconnect the channel so that the worker threads break.
         let sender = self.sender.take().unwrap();
         drop(sender);
 
@@ -81,16 +81,45 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
     let file = fs::File::create(format!("{}/{}--{}.sz", directory, timestamp, i)).unwrap();
     let mut writer = lz4f::WriteCompressor::new(file, compress_config).unwrap();
 
+    let u64_len = mem::size_of::<u64>() as u64;
+
     thread::spawn(move || {
+        // When a stream_frame is received from the channel, write it to the
+        // compressor in packets of bytes that have this layout:
+        //
+        // [ packet_len | stream_frame_len | stream_frame | image_data ]
+
         loop {
+            let mut packet_len: u64 = u64_len + u64_len;
+
             let stream_frame = match receiver.recv() { Ok(f) => f, _ => break };
+            let stream_frame_bytes = bincode::encode_to_vec(&stream_frame, encode_config).unwrap();
+            let stream_frame_len = stream_frame_bytes.len() as u64;
+            packet_len += stream_frame_len;
 
-            bincode::encode_to_vec(&stream_frame, encode_config);
+            let mut write_image_data_bytes = None;
 
-            writer.write_all(b"hello").unwrap();
+            if let Some(image_data) = &stream_frame.image_data {
+                let image_data_bytes = image_data.slice(..).get_mapped_range();
+                packet_len += image_data_bytes.len() as u64;
+
+                write_image_data_bytes = Some(move |w: &mut Writer| {
+                    w.write_all(&image_data_bytes).unwrap()
+                });
+            }
+
+            let packet_len_bytes = bincode::encode_to_vec(packet_len, encode_config).unwrap();
+            let stream_frame_len_bytes =  bincode::encode_to_vec(stream_frame_len, encode_config).unwrap();
+
+            writer.write_all(&packet_len_bytes).unwrap();
+            writer.write_all(&stream_frame_len_bytes).unwrap();
+            writer.write_all(&stream_frame_bytes).unwrap();
+            write_image_data_bytes.map(|closure| closure(&mut writer));
         }
     })
 }
+
+type Writer = lz4f::WriteCompressor::<fs::File>;
 
 fn compression_config(lz4_compression_level: u8) -> lz4f::Preferences {
     lz4f::PreferencesBuilder::new()
