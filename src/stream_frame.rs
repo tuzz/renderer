@@ -1,9 +1,10 @@
 use std::ops;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[cfg_attr(feature="bincode", derive(bincode::Encode))]
 pub struct StreamFrame {
+    pub status: FrameStatus,
     pub image_data: Option<ImageData>,
 
     pub width: usize,
@@ -20,6 +21,14 @@ pub struct StreamFrame {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature="bincode", derive(bincode::Encode))]
+pub enum FrameStatus {
+    Captured, // The frame was captured successfully (image_data=Some)
+    Dropped,  // The frame was dropped to save memory (image_data=None)
+    Missing,  // The frame was missing from the compressed files (image_data=None)
+}
+
+#[derive(Debug)]
 pub struct ImageData(pub wgpu::Buffer);
 
 impl Drop for StreamFrame {
@@ -33,6 +42,12 @@ impl ops::Deref for ImageData {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl Default for FrameStatus {
+    fn default() -> Self {
+        FrameStatus::Missing
     }
 }
 

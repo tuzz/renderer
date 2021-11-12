@@ -82,9 +82,9 @@ impl CaptureStream {
         let frame_size_in_bytes = padded_bytes_per_row * height;
 
         let prev_size = inner.buffer_size_in_bytes.fetch_add(frame_size_in_bytes, Relaxed);
-        let should_drop_frame = prev_size > self.max_buffer_size_in_bytes;
+        let drop_frame = prev_size > self.max_buffer_size_in_bytes;
 
-        let buffer = if should_drop_frame {
+        let buffer = if drop_frame {
             inner.buffer_size_in_bytes.store(prev_size, Relaxed); // Revert
             None
         } else {
@@ -97,12 +97,13 @@ impl CaptureStream {
         // The frame number is incremented regardless of whether the frame is dropped.
         inner.frame_number += 1;
 
+        let status = if drop_frame { crate::FrameStatus::Dropped } else { crate::FrameStatus::Captured };
         let image_data = buffer.map(|b| crate::ImageData(b));
         let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
         inner.stream_frames.push_back(crate::StreamFrame {
-            image_data, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
+            status, image_data, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
         });
     }
 

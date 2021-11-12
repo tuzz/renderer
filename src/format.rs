@@ -41,3 +41,9 @@ impl Format {
         self.channels() * self.bytes_per_channel()
     }
 }
+
+impl Default for Format {
+    fn default() -> Self {
+        Self::RgbaU8
+    }
+}

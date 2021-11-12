@@ -1,3 +1,5 @@
+#![feature(drain_filter)]
+
 mod attribute;
 mod blend_mode;
 mod buffer;
