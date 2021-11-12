@@ -82,8 +82,6 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
     let file = fs::File::create(format!("{}/{}--{}.sz", directory, timestamp, i)).unwrap();
     let mut writer = lz4f::WriteCompressor::new(BufWriter::new(file), compress_config).unwrap();
 
-    let u64_len = mem::size_of::<u64>() as u64;
-
     thread::spawn(move || {
         // When a stream_frame is received from the channel, write it to the
         // compressor in packets of bytes that have this layout:
@@ -91,7 +89,7 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
         // [ packet_len | stream_frame_len | stream_frame | image_data ]
 
         loop {
-            let mut packet_len: u64 = u64_len + u64_len;
+            let mut packet_len: u64 = (U64_LEN + U64_LEN) as u64;
 
             let stream_frame = match receiver.recv() { Ok(f) => f, _ => break };
             let stream_frame_bytes = bincode::encode_to_vec(&stream_frame, encode_config).unwrap();
@@ -119,6 +117,8 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
         }
     })
 }
+
+const U64_LEN: usize = mem::size_of::<u64>();
 
 type Writer = lz4f::WriteCompressor::<BufWriter<fs::File>>;
 

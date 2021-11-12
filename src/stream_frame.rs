@@ -2,7 +2,7 @@ use std::ops;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 
 #[derive(Debug, Default)]
-#[cfg_attr(feature="bincode", derive(bincode::Encode))]
+#[cfg_attr(feature="bincode", derive(bincode::Encode, bincode::Decode))]
 pub struct StreamFrame {
     pub status: FrameStatus,
     pub image_data: Option<ImageData>,
@@ -21,7 +21,7 @@ pub struct StreamFrame {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature="bincode", derive(bincode::Encode))]
+#[cfg_attr(feature="bincode", derive(bincode::Encode, bincode::Decode))]
 pub enum FrameStatus {
     Captured, // The frame was captured successfully (image_data=Some)
     Dropped,  // The frame was dropped to save memory (image_data=None)
@@ -58,5 +58,14 @@ use bincode::enc::write::Writer;
 impl bincode::Encode for ImageData {
     fn encode<E: bincode::enc::Encoder>(&self, mut encoder: E) -> Result<(), bincode::error::EncodeError> {
         encoder.writer().write(&[])
+    }
+}
+
+#[cfg(feature="bincode")]
+impl bincode::Decode for ImageData {
+    fn decode<D: bincode::de::Decoder>(mut _decoder: D) -> Result<Self, bincode::error::DecodeError> {
+        // TODO: replace with an ImageData enum
+        #[allow(invalid_value, deprecated)]
+        Ok(unsafe { std::mem::uninitialized::<ImageData>() })
     }
 }

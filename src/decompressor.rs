@@ -1,4 +1,4 @@
-use std::{fs, thread, cmp, ops, io::BufReader};
+use std::{mem, fs, thread, cmp, ops, io::{Read, BufReader}};
 use std::collections::{BinaryHeap, BTreeMap};
 use std::sync::{Arc, atomic::AtomicUsize};
 use chrono::{DateTime, Utc};
@@ -37,7 +37,7 @@ impl Decompressor {
         if self.remove_files_after_decompression {
             for (_timestamp, filenames) in ordered_timestamps {
                 for filename in filenames {
-                    let result = fs::remove_file(format!("{}/{}", self.directory, filename));
+                    let _ = fs::remove_file(format!("{}/{}", self.directory, filename));
                 }
             }
         }
@@ -134,15 +134,57 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
 fn spawn_worker(directory: &str, filename: &str) -> Worker {
     let (sender, receiver) = crossbeam_channel::unbounded(); // TODO: bounded
 
+    let decode_config = decoding_config();
+
     let file = fs::File::open(format!("{}/{}", directory, filename)).unwrap();
-    let reader = BufReadDecompressor::new(BufReader::new(file)).unwrap();
+    let mut reader = BufReadDecompressor::new(BufReader::new(file)).unwrap();
+
+    let mut lengths_buffer = [0; U64_LEN + U64_LEN];
+    let mut remainder_buffer = vec![];
 
     let thread = thread::spawn(move || {
-        // TODO: decode bytes
-        sender.send(crate::StreamFrame::default()).unwrap();
+        // Read decompressed bytes from the file. Decode each packet to a
+        // StreamFrame and send it to the channel. The packets have this layout:
+        //
+        // [ packet_len | stream_frame_len | stream_frame | image_data ]
+        //
+        // If the reader ends cleanly at the end of a packet then return.
+        // Otherwise, send a StreamFrame to the channel with FrameStatus::Corrupt.
+
+        loop {
+            match reader.read_exact(&mut lengths_buffer) { Ok(_) => {}, _ => return }
+
+            let packet_len_bytes = &lengths_buffer[0..U64_LEN];
+            let packet_len_result = bincode::decode_from_slice(packet_len_bytes, decode_config);
+            let packet_len: u64 = match packet_len_result { Ok(p) => p, _ => break };
+
+            let stream_frame_len_bytes = &lengths_buffer[U64_LEN..];
+            let stream_frame_len_result = bincode::decode_from_slice(stream_frame_len_bytes, decode_config);
+            let stream_frame_len: u64 = match stream_frame_len_result { Ok(p) => p, _ => break };
+
+            let remainder_len = packet_len as usize - U64_LEN - U64_LEN;
+            remainder_buffer.resize(remainder_len, 0);
+            match reader.read_exact(&mut remainder_buffer) { Ok(_) => {}, _ => break }
+
+            let stream_frame_bytes = &remainder_buffer[0..stream_frame_len as usize];
+            let stream_frame_result = bincode::decode_from_slice(stream_frame_bytes, decode_config);
+            let stream_frame = match stream_frame_result { Ok(f) => f, _ => break };
+
+            let _image_data_bytes = &remainder_buffer[stream_frame_len as usize..]; // TODO: store on StreamFrame
+
+            sender.send(stream_frame).unwrap();
+        }
+
+        // TODO: corrupt frame
     });
 
     Worker { thread, receiver }
+}
+
+const U64_LEN: usize = mem::size_of::<u64>();
+
+fn decoding_config() -> bincode::config::Configuration {
+    bincode::config::Configuration::standard()
 }
 
 struct OrderableFrame(crate::StreamFrame);
