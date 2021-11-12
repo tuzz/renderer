@@ -1,8 +1,13 @@
-use std::{thread, collections::BinaryHeap, cmp, ops};
+use std::{fs, thread, cmp, ops, io::BufReader};
+use std::collections::{BinaryHeap, BTreeMap};
 use std::sync::{Arc, atomic::AtomicUsize};
-use crossbeam_channel::{Sender, Receiver};
+use chrono::{DateTime, Utc};
+use crossbeam_channel::Receiver;
+use lzzzz::lz4f::BufReadDecompressor;
 
-pub struct Decompressor;
+pub struct Decompressor {
+    pub directory: String,
+}
 
 struct Worker {
     pub thread: thread::JoinHandle<()>,
@@ -10,16 +15,61 @@ struct Worker {
 }
 
 impl Decompressor {
-    pub fn new(_directory: &str, _concurrent: bool, _remove_after: bool) -> Self {
-        Self
+    pub fn new(directory: &str, _concurrent: bool, _remove_after: bool) -> Self {
+        Self { directory: directory.to_string() }
     }
 
     pub fn decompress_from_disk(&self, mut process_function: Box<dyn FnMut(crate::StreamFrame)>) {
-        // TODO: run for each timestamped group of files (one thread per file)
+        let ordered_timestamps = scan_directory_for_timestamps(&self.directory);
 
-        let mut workers: Vec<Worker> = vec![];
-        order_frames_from_worker_threads(workers, &mut process_function);
+        for (_timestamp, mut filenames) in ordered_timestamps {
+            filenames.sort();
+
+            let workers = filenames.iter().map(|filename| {
+                spawn_worker(&self.directory, &filename)
+            }).collect();
+
+            order_frames_from_worker_threads(workers, &mut process_function);
+        }
+
+        // TODO: delete files if flag set
     }
+}
+
+fn scan_directory_for_timestamps(directory: &str) -> BTreeMap<DateTime<Utc>, Vec<String>> {
+    let mut map = BTreeMap::new();
+
+    for result in fs::read_dir(directory).unwrap() {
+        let dir_entry = match result { Ok(d) => d, _ => continue };
+
+        let result = dir_entry.metadata();
+        let metadata = match result { Ok(m) => m, _ => continue };
+
+        if metadata.len() == 0 { continue; }
+
+        let result = dir_entry.file_name().into_string();
+        let filename = match result { Ok(f) => f, _ => continue };
+
+        let result = recover_timestamp_from_filename(&filename);
+        let timestamp = match result { Ok(t) => t, _ => continue };
+
+        let filenames = map.entry(timestamp).or_insert_with(|| vec![]);
+        filenames.push(filename);
+    }
+
+    map
+}
+
+fn recover_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>, ()> {
+    if !filename.ends_with(".sz") { return Err(()); }
+
+    let option = filename.split("--").next();
+    let prefix = match option { Some(s) => s, _ => return Err(()) };
+
+    let result = chrono::DateTime::parse_from_rfc3339(&prefix.replace("_", ":"));
+    let timestamp = match result { Ok(t) => t, _ => return Err(()) };
+
+    Ok(timestamp.into())
 }
 
 fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: &mut Box<dyn FnMut(crate::StreamFrame)>) {
@@ -71,6 +121,22 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
 
         expected_frame += 1;
     }
+}
+
+fn spawn_worker(directory: &str, filename: &str) -> Worker {
+    let (sender, receiver) = crossbeam_channel::unbounded(); // TODO: bounded
+
+    let file = fs::File::open(format!("{}/{}", directory, filename)).unwrap();
+    let reader = BufReadDecompressor::new(BufReader::new(file)).unwrap();
+
+    let thread = thread::spawn(move || {
+        // TODO: decode bytes
+        sender.send(crate::StreamFrame::default()).unwrap();
+
+        println!("{:?}", reader);
+    });
+
+    Worker { thread, receiver }
 }
 
 struct OrderableFrame(crate::StreamFrame);
