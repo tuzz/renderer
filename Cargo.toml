@@ -10,6 +10,10 @@ futures = "0.3"
 noop-waker = "0.1.0"
 winit = "0.25"
 
+[dependencies.png]
+version = "0.16"
+optional = true
+
 [dependencies.shaderc]
 version = "0.7"
 optional = true
@@ -20,6 +24,6 @@ features = ["spirv"]
 
 [features]
 shader_compilation = ["shaderc"]
-
-[dev-dependencies]
-png = "0.16"
+capture_to_png = ["png"]
+capture_compression = []
+all = ["shader_compilation", "capture_to_png", "capture_compression"]

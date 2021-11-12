@@ -38,3 +38,12 @@ pub use visibility::*;
 
 #[cfg(feature="shader_compilation")] mod compiler;
 #[cfg(feature="shader_compilation")] pub use compiler::*;
+
+#[cfg(feature="capture_to_png")] mod png_writer;
+#[cfg(feature="capture_to_png")] pub use png_writer::*;
+
+#[cfg(feature="capture_compression")] mod compressor;
+#[cfg(feature="capture_compression")] pub use compressor::*;
+
+#[cfg(feature="capture_compression")] mod decompressor;
+#[cfg(feature="capture_compression")] pub use decompressor::*;

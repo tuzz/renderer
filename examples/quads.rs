@@ -1,5 +1,4 @@
 use winit::{event, event_loop, window};
-use std::io::Write;
 
 const A_POSITION: usize = 0;
 const A_TEX_COORD: usize = 1;
@@ -86,32 +85,22 @@ fn main() {
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
-    // The renderer can also capture a raw stream of video by adding f_capture_stream to your shaders.
-    // The capture stream can have its own clear color and capture from a subset of the pipelines.
-    // Constraint: If the pipelines write to textures, they must be the same size as the framebuffer.
+    // The renderer can also capture raw frames by adding f_capture_stream to your shaders.
+    // This is very CPU and data intensive (2GB/s at 4K60) so it's recommended to:
+    //
+    // 1) Compress the raw frame data to disk:
+    let compressor = renderer::Compressor::new("captured_frames");
     renderer.set_capture_stream(&[&pipeline], Some(clear_color), 500., Box::new(move |stream_frame| {
-        if stream_frame.frame_number % 300 != 0 { return; } // Comment out to capture every frame.
+        compressor.compress_to_disk(&stream_frame);
+    }));
 
-        // If the GPU memory limit (set to 500MB) is exceeded, the frame is dropped and 'buffer' is None.
-        if stream_frame.buffer.is_none() { return; }
+    // 2) Decompress and process this data later:
+    let decompressor = renderer::Decompressor::new("captured_frames", true, true);
+    decompressor.decompress_from_disk(Box::new(|stream_frame| {
+        let filename = format!("frame-{}.png", stream_frame.frame_number);
 
-        // In practice, you'd want to do this in a separate thread. See https://github.com/tuzz/sun-stream
-        let file = std::fs::File::create(format!("frame-{}.png", stream_frame.frame_number)).unwrap();
-        let mut png = png::Encoder::new(file, stream_frame.width as u32, stream_frame.height as u32);
-
-        png.set_depth(png::BitDepth::Eight);
-        png.set_color(png::ColorType::RGBA);
-
-        let mut writer = png.write_header().unwrap().into_stream_writer_with_size(stream_frame.unpadded_bytes_per_row);
-        let image_data = stream_frame.buffer.as_ref().unwrap().slice(..).get_mapped_range();
-
-        // Skip past padding that is added to the raw image data if the width is not a multiple of 64.
-        for chunk in image_data.chunks(stream_frame.padded_bytes_per_row) {
-            writer.write_all(&chunk[..stream_frame.unpadded_bytes_per_row]).unwrap();
-        }
-
-        writer.finish().unwrap();
-        println!("Captured frame {} to a png file.", stream_frame.frame_number);
+        renderer::PngWriter::write_png(&filename, &stream_frame).unwrap();
+        println!("Captured {} from the last run of this example", filename);
     }));
 
     // Set the start position of each quad and its velocity in the x, y directions.

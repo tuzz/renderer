@@ -6,7 +6,7 @@ vertex/fragment shader pipeline. The [quads example](./examples/quads.rs) shows
 how to use the crate. You can run it with:
 
 ```sh
-$ cargo run --release --example quads --features shader_compilation
+$ cargo run --release --example quads --features all
 ```
 
 This crate is based on the first part of
