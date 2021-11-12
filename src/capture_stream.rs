@@ -16,7 +16,7 @@ pub struct Inner {
     pub cleared_this_frame: bool,
 
     pub buffer_size_in_bytes: Arc<AtomicUsize>,
-    pub stream_buffers: VecDeque<StreamFrame>,
+    pub stream_frames: VecDeque<StreamFrame>,
     pub map_futures: VecDeque<Option<MapFuture>>,
 
     pub frame_number: usize,
@@ -53,7 +53,7 @@ impl CaptureStream {
             clear_color,
 
             buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
-            stream_buffers: VecDeque::new(),
+            stream_frames: VecDeque::new(),
             map_futures: VecDeque::new(),
 
             frame_number: 0,
@@ -120,7 +120,7 @@ impl CaptureStream {
         let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
-        inner.stream_buffers.push_back(StreamFrame {
+        inner.stream_frames.push_back(StreamFrame {
             image_data, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
         });
     }
@@ -128,14 +128,14 @@ impl CaptureStream {
     pub fn copy_texture_to_buffer_if_present(&self, encoder: &mut wgpu::CommandEncoder) {
         let inner = self.inner.borrow_mut();
 
-        let stream_buffer = inner.stream_buffers.back().unwrap();
-        let image_data = match &stream_buffer.image_data { Some(b) => b, _ => return };
+        let stream_frame = inner.stream_frames.back().unwrap();
+        let image_data = match &stream_frame.image_data { Some(b) => b, _ => return };
 
         let image_copy = inner.texture.image_copy_texture();
 
         let buffer_copy = wgpu::ImageCopyBuffer {
             buffer: &image_data,
-            layout: inner.texture.image_data_layout(stream_buffer.padded_bytes_per_row as u32),
+            layout: inner.texture.image_data_layout(stream_frame.padded_bytes_per_row as u32),
         };
 
         encoder.copy_texture_to_buffer(image_copy, buffer_copy, inner.texture.extent());
@@ -144,11 +144,11 @@ impl CaptureStream {
     pub fn initiate_buffer_mapping(&mut self) {
         let mut inner = self.inner.borrow_mut();
 
-        for i in 0..inner.stream_buffers.len() {
+        for i in 0..inner.stream_frames.len() {
             if inner.map_futures.get(i).is_some() { continue; }
-            let stream_buffer = &inner.stream_buffers[i];
+            let stream_frame = &inner.stream_frames[i];
 
-            if let Some(buffer) = &stream_buffer.image_data {
+            if let Some(buffer) = &stream_frame.image_data {
                 let future = buffer.slice(..).map_async(wgpu::MapMode::Read);
                 inner.map_futures.push_back(Some(MapFuture(future.boxed())));
             } else {
@@ -161,16 +161,16 @@ impl CaptureStream {
         let mut inner = self.inner.borrow_mut();
 
         loop {
-            if inner.stream_buffers.is_empty() { break; }
+            if inner.stream_frames.is_empty() { break; }
             let option = &mut inner.map_futures[0];
 
             // If the frame was dropped, immediately call the process function.
             // Let it decide what to do with the dropped frame.
             if option.is_none() {
-                let stream_buffer = inner.stream_buffers.pop_front().unwrap();
+                let stream_frame = inner.stream_frames.pop_front().unwrap();
                 inner.map_futures.pop_front().unwrap();
 
-                (self.process_function)(stream_buffer);
+                (self.process_function)(stream_frame);
                 continue;
             }
 
@@ -183,10 +183,10 @@ impl CaptureStream {
                 Poll::Ready(result) => {
                     result.unwrap(); // Panic if mapping failed.
 
-                    let stream_buffer = inner.stream_buffers.pop_front().unwrap();
+                    let stream_frame = inner.stream_frames.pop_front().unwrap();
                     inner.map_futures.pop_front().unwrap();
 
-                    (self.process_function)(stream_buffer);
+                    (self.process_function)(stream_frame);
                 },
             }
         }
@@ -225,7 +225,6 @@ use bincode::enc::write::Writer;
 
 #[cfg(feature="bincode")]
 impl bincode::Encode for ImageData {
-
     fn encode<E: bincode::enc::Encoder>(&self, mut encoder: E) -> Result<(), bincode::error::EncodeError> {
         encoder.writer().write(&[])
     }
