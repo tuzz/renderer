@@ -95,7 +95,7 @@ fn main() {
     }));
 
     // 2) Decompress and process this data later:
-    let decompressor = renderer::Decompressor::new("captured_frames", true, true);
+    let decompressor = renderer::Decompressor::new("captured_frames", true);
     decompressor.decompress_from_disk(Box::new(|stream_frame| {
         let filename = format!("frame-{}.png", stream_frame.frame_number);
 

@@ -7,6 +7,7 @@ use lzzzz::lz4f::BufReadDecompressor;
 
 pub struct Decompressor {
     pub directory: String,
+    pub remove_files_after_decompression: bool,
 }
 
 struct Worker {
@@ -15,14 +16,14 @@ struct Worker {
 }
 
 impl Decompressor {
-    pub fn new(directory: &str, _concurrent: bool, _remove_after: bool) -> Self {
-        Self { directory: directory.to_string() }
+    pub fn new(directory: &str, remove_files_after_decompression: bool) -> Self {
+        Self { directory: directory.to_string(), remove_files_after_decompression }
     }
 
     pub fn decompress_from_disk(&self, mut process_function: Box<dyn FnMut(crate::StreamFrame)>) {
-        let ordered_timestamps = scan_directory_for_timestamps(&self.directory);
+        let mut ordered_timestamps = scan_directory_for_timestamps(&self.directory);
 
-        for (_timestamp, mut filenames) in ordered_timestamps {
+        for (_timestamp, filenames) in ordered_timestamps.iter_mut() {
             filenames.sort();
 
             let workers = filenames.iter().map(|filename| {
@@ -32,7 +33,14 @@ impl Decompressor {
             order_frames_from_worker_threads(workers, &mut process_function);
         }
 
-        // TODO: delete files if flag set
+        // Wait until the very end before removing files in case a panic happens mid-way through.
+        if self.remove_files_after_decompression {
+            for (_timestamp, filenames) in ordered_timestamps {
+                for filename in filenames {
+                    let result = fs::remove_file(format!("{}/{}", self.directory, filename));
+                }
+            }
+        }
     }
 }
 
@@ -132,8 +140,6 @@ fn spawn_worker(directory: &str, filename: &str) -> Worker {
     let thread = thread::spawn(move || {
         // TODO: decode bytes
         sender.send(crate::StreamFrame::default()).unwrap();
-
-        println!("{:?}", reader);
     });
 
     Worker { thread, receiver }
