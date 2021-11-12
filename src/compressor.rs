@@ -1,5 +1,6 @@
 use std::{fs, thread, time, io::Write};
 use crossbeam_channel::{Sender, Receiver};
+use lzzzz::lz4f;
 
 pub struct Compressor {
     pub timestamp: String,
@@ -9,14 +10,17 @@ pub struct Compressor {
 }
 
 impl Compressor {
-    pub fn new(directory: &str, max_frames_queued: Option<usize>) -> Self {
+    pub fn new(directory: &str, max_frames_queued: Option<usize>, lz4_compression_level: u8) -> Self {
+        let is_valid_level = lz4_compression_level as i32 <= lz4f::CLEVEL_MAX;
+        assert!(is_valid_level, "Please choose a compression level in the range 0..={}", lz4f::CLEVEL_MAX);
+
         fs::create_dir_all(directory).unwrap();
 
         let timestamp = generate_timestamp();
         let (sender, receiver) = create_channel(max_frames_queued);
 
         let threads = (0..num_cpus::get()).map(|i| {
-            spawn_thread(&directory, &timestamp, i, &receiver)
+            spawn_thread(&receiver, &directory, &timestamp, i, lz4_compression_level)
         }).collect();
 
         Compressor { timestamp, threads, sender: Some(sender), receiver }
@@ -68,15 +72,23 @@ fn create_channel(max_frames_queued: Option<usize>) -> (Sender<crate::StreamFram
     }
 }
 
-fn spawn_thread(directory: &str, timestamp: &str, i: usize, receiver: &Receiver<crate::StreamFrame>) -> thread::JoinHandle<()> {
-    let mut file = fs::File::create(format!("{}/{}--{}.sz", directory, timestamp, i)).unwrap();
+fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timestamp: &str, i: usize, lz4_compression_level: u8) -> thread::JoinHandle<()> {
     let receiver = receiver.clone();
+
+    let preferences = lz4f::PreferencesBuilder::new()
+        .compression_level(lz4_compression_level as i32)
+        .favor_dec_speed(lz4f::FavorDecSpeed::Disabled)
+        .auto_flush(lz4f::AutoFlush::Enabled)
+        .build();
+
+    let file = fs::File::create(format!("{}/{}--{}.sz", directory, timestamp, i)).unwrap();
+    let mut writer = lz4f::WriteCompressor::new(file, preferences).unwrap();
 
     thread::spawn(move || {
         loop {
             let _stream_frame = match receiver.recv() { Ok(f) => f, _ => break };
 
-            file.write_all(b"hello").unwrap();
+            writer.write_all(b"hello").unwrap();
         }
     })
 }
