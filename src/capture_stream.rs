@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, rc, cell, pin, fmt};
+use std::{collections::VecDeque, rc, cell, pin, fmt, ops};
 use std::{future::Future, task::Context, task::Poll};
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 use futures::FutureExt;
@@ -23,12 +23,13 @@ pub struct Inner {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature="bincode", derive(bincode::Encode))]
 pub struct StreamFrame {
-    pub buffer: Option<wgpu::Buffer>,
-    pub format: crate::Format,
+    pub image_data: Option<ImageData>,
 
     pub width: usize,
     pub height: usize,
+    pub format: crate::Format,
 
     pub unpadded_bytes_per_row: usize,
     pub padded_bytes_per_row: usize,
@@ -38,6 +39,9 @@ pub struct StreamFrame {
     pub frame_size_in_bytes: usize,
     pub buffer_size_in_bytes: Arc<AtomicUsize>,
 }
+
+#[derive(Debug)]
+pub struct ImageData(wgpu::Buffer);
 
 impl CaptureStream {
     pub fn new(renderer: &crate::Renderer, clear_color: Option<crate::ClearColor>, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(StreamFrame)>) -> Self {
@@ -112,11 +116,12 @@ impl CaptureStream {
         // The frame number is incremented regardless of whether the frame is dropped.
         inner.frame_number += 1;
 
+        let image_data = buffer.map(|b| ImageData(b));
         let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
         inner.stream_buffers.push_back(StreamFrame {
-            buffer, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
+            image_data, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
         });
     }
 
@@ -124,12 +129,12 @@ impl CaptureStream {
         let inner = self.inner.borrow_mut();
 
         let stream_buffer = inner.stream_buffers.back().unwrap();
-        let buffer = match &stream_buffer.buffer { Some(b) => b, _ => return };
+        let image_data = match &stream_buffer.image_data { Some(b) => b, _ => return };
 
         let image_copy = inner.texture.image_copy_texture();
 
         let buffer_copy = wgpu::ImageCopyBuffer {
-            buffer,
+            buffer: &image_data,
             layout: inner.texture.image_data_layout(stream_buffer.padded_bytes_per_row as u32),
         };
 
@@ -143,7 +148,7 @@ impl CaptureStream {
             if inner.map_futures.get(i).is_some() { continue; }
             let stream_buffer = &inner.stream_buffers[i];
 
-            if let Some(buffer) = &stream_buffer.buffer {
+            if let Some(buffer) = &stream_buffer.image_data {
                 let future = buffer.slice(..).map_async(wgpu::MapMode::Read);
                 inner.map_futures.push_back(Some(MapFuture(future.boxed())));
             } else {
@@ -204,6 +209,25 @@ pub struct MapFuture(pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsync
 impl fmt::Debug for MapFuture {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MapFuture").finish()
+    }
+}
+
+impl ops::Deref for ImageData {
+    type Target = wgpu::Buffer;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(feature="bincode")]
+use bincode::enc::write::Writer;
+
+#[cfg(feature="bincode")]
+impl bincode::Encode for ImageData {
+
+    fn encode<E: bincode::enc::Encoder>(&self, mut encoder: E) -> Result<(), bincode::error::EncodeError> {
+        encoder.writer().write(&[])
     }
 }
 

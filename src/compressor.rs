@@ -75,20 +75,31 @@ fn create_channel(max_frames_queued: Option<usize>) -> (Sender<crate::StreamFram
 fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timestamp: &str, i: usize, lz4_compression_level: u8) -> thread::JoinHandle<()> {
     let receiver = receiver.clone();
 
-    let preferences = lz4f::PreferencesBuilder::new()
-        .compression_level(lz4_compression_level as i32)
-        .favor_dec_speed(lz4f::FavorDecSpeed::Disabled)
-        .auto_flush(lz4f::AutoFlush::Enabled)
-        .build();
+    let compress_config = compression_config(lz4_compression_level);
+    let encode_config = encoding_config();
 
     let file = fs::File::create(format!("{}/{}--{}.sz", directory, timestamp, i)).unwrap();
-    let mut writer = lz4f::WriteCompressor::new(file, preferences).unwrap();
+    let mut writer = lz4f::WriteCompressor::new(file, compress_config).unwrap();
 
     thread::spawn(move || {
         loop {
-            let _stream_frame = match receiver.recv() { Ok(f) => f, _ => break };
+            let stream_frame = match receiver.recv() { Ok(f) => f, _ => break };
+
+            bincode::encode_to_vec(&stream_frame, encode_config);
 
             writer.write_all(b"hello").unwrap();
         }
     })
+}
+
+fn compression_config(lz4_compression_level: u8) -> lz4f::Preferences {
+    lz4f::PreferencesBuilder::new()
+        .compression_level(lz4_compression_level as i32)
+        .favor_dec_speed(lz4f::FavorDecSpeed::Disabled)
+        .auto_flush(lz4f::AutoFlush::Enabled)
+        .build()
+}
+
+fn encoding_config() -> bincode::config::Configuration {
+    bincode::config::Configuration::standard()
 }

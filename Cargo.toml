@@ -5,6 +5,7 @@ authors = ["Chris Patuzzo <chris@patuzzo.co.uk>"]
 edition = "2021"
 
 [dependencies]
+bincode = { version = "2.0.0-alpha.1", optional = true }
 bytemuck = "1.4"
 chrono = { version = "0.4", optional = true }
 crossbeam-channel = { version = "0.5.1", optional = true }
@@ -20,5 +21,5 @@ winit = "0.25"
 [features]
 shader_compilation = ["shaderc"]
 capture_to_png = ["png"]
-capture_compression = ["chrono", "crossbeam-channel", "lzzzz", "num_cpus"]
+capture_compression = ["bincode", "chrono", "crossbeam-channel", "lzzzz", "num_cpus"]
 all = ["shader_compilation", "capture_to_png", "capture_compression"]

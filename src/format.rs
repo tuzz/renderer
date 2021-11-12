@@ -1,4 +1,5 @@
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "bincode", derive(bincode::Encode))]
 pub enum Format {
     RU8,
     BgraU8,
