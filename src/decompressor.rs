@@ -165,7 +165,11 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
 }
 
 fn spawn_worker(directory: &str, filename: &str) -> Worker {
-    let (sender, receiver) = crossbeam_channel::bounded(2); // TODO
+    // Usually the slow part of the code will be the actual processing rather
+    // than decompressing and decoding stream frames. Therefore, bound the
+    // channel size to 0 to keep memory usage down. This forces worker threads
+    // to wait for the main thread to be ready before decoding their next frame.
+    let (sender, receiver) = crossbeam_channel::bounded(0);
 
     let decode_config = decoding_config();
 
