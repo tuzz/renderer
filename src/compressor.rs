@@ -7,7 +7,6 @@ pub struct Compressor {
     pub timestamp: String,
     pub threads: Vec<thread::JoinHandle<()>>,
     pub sender: Option<Sender<crate::StreamFrame>>,
-    pub receiver: Receiver<crate::StreamFrame>,
 }
 
 impl Compressor {
@@ -24,7 +23,7 @@ impl Compressor {
             spawn_thread(&receiver, &directory, &timestamp, i, lz4_compression_level)
         }).collect();
 
-        Compressor { timestamp, threads, sender: Some(sender), receiver }
+        Compressor { timestamp, threads, sender: Some(sender) }
     }
 
     pub fn compress_to_disk(&self, stream_frame: crate::StreamFrame) {
@@ -35,7 +34,7 @@ impl Compressor {
         if self.sender.is_none() { return; }
 
         // Wait for the worker threads to exhaust the channel.
-        while self.receiver.len() > 0 {
+        while self.sender.as_ref().unwrap().len() > 0 {
             thread::sleep(time::Duration::from_millis(10));
         }
 

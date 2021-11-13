@@ -96,11 +96,12 @@ fn main() {
 
     // 2) Decompress and process this data later:
     let decompressor = renderer::Decompressor::new("captured_frames", true);
-    decompressor.decompress_from_disk(Box::new(|stream_frame| {
-        let filename = format!("frame-{}.png", stream_frame.frame_number);
+    let png_writer = renderer::PngWriter::new();
+    decompressor.decompress_from_disk(Box::new(move |stream_frame| {
+        let filename = format!("frame-{:0>8}.png", stream_frame.frame_number);
 
-        renderer::PngWriter::write_png(&filename, &stream_frame).unwrap();
-        println!("Captured {} from the last run of this example", filename);
+        println!("Captured {} from the the last run of this example.", filename);
+        let _ = png_writer.write_png(stream_frame, filename);
     }));
 
     // Set the start position of each quad and its velocity in the x, y directions.
