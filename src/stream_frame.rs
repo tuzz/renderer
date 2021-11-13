@@ -58,7 +58,10 @@ impl ImageData {
 
 impl Drop for StreamFrame {
     fn drop(&mut self) {
-        self.buffer_size_in_bytes.fetch_sub(self.frame_size_in_bytes, Relaxed);
+        // We still set frame_size_in_bytes for dropped frames.
+        if self.image_data.is_some() {
+            self.buffer_size_in_bytes.fetch_sub(self.frame_size_in_bytes, Relaxed);
+        }
     }
 }
 
