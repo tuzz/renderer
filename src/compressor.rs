@@ -99,7 +99,7 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
             let mut write_image_data_bytes = None;
 
             if let Some(image_data) = &stream_frame.image_data {
-                let image_data_bytes = image_data.slice(..).get_mapped_range();
+                let image_data_bytes = image_data.buffer().slice(..).get_mapped_range();
                 packet_len += image_data_bytes.len() as u64;
 
                 write_image_data_bytes = Some(move |w: &mut Writer| {

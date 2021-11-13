@@ -1,4 +1,3 @@
-use std::ops;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 
 #[derive(Debug, Default)]
@@ -29,19 +28,37 @@ pub enum FrameStatus {
 }
 
 #[derive(Debug)]
-pub struct ImageData(pub wgpu::Buffer);
+pub enum ImageData {
+    Buffer(wgpu::Buffer),
+    Bytes(Vec<u8>),
+}
+
+impl ImageData {
+    pub fn buffer(&self) -> &wgpu::Buffer {
+        match self {
+            Self::Buffer(b) => b,
+            Self::Bytes(_) => panic!("The buffer is no longer available."),
+        }
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        match self {
+            Self::Buffer(_) => panic!("Please use ImageData::bytes_fn instead."),
+            Self::Bytes(v) => v,
+        }
+    }
+
+    pub fn bytes_fn<F: FnMut(&[u8])>(&self, mut f: F) {
+        match self {
+            Self::Buffer(b) => f(&b.slice(..).get_mapped_range()),
+            Self::Bytes(v) => f(v),
+        }
+    }
+}
 
 impl Drop for StreamFrame {
     fn drop(&mut self) {
         self.buffer_size_in_bytes.fetch_sub(self.frame_size_in_bytes, Relaxed);
-    }
-}
-
-impl ops::Deref for ImageData {
-    type Target = wgpu::Buffer;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
     }
 }
 
@@ -52,20 +69,15 @@ impl Default for FrameStatus {
 }
 
 #[cfg(feature="bincode")]
-use bincode::enc::write::Writer;
-
-#[cfg(feature="bincode")]
 impl bincode::Encode for ImageData {
-    fn encode<E: bincode::enc::Encoder>(&self, mut encoder: E) -> Result<(), bincode::error::EncodeError> {
-        encoder.writer().write(&[])
+    fn encode<E: bincode::enc::Encoder>(&self, _encoder: E) -> Result<(), bincode::error::EncodeError> {
+        Ok(())
     }
 }
 
 #[cfg(feature="bincode")]
 impl bincode::Decode for ImageData {
     fn decode<D: bincode::de::Decoder>(mut _decoder: D) -> Result<Self, bincode::error::DecodeError> {
-        // TODO: replace with an ImageData enum
-        #[allow(invalid_value, deprecated)]
-        Ok(unsafe { std::mem::uninitialized::<ImageData>() })
+        Ok(ImageData::Bytes(vec![]))
     }
 }

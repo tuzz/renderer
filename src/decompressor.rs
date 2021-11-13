@@ -168,9 +168,10 @@ fn spawn_worker(directory: &str, filename: &str) -> Worker {
 
             let stream_frame_bytes = &remainder_buffer[0..stream_frame_len as usize];
             let stream_frame_result = bincode::decode_from_slice(stream_frame_bytes, decode_config);
-            let stream_frame = match stream_frame_result { Ok(f) => f, _ => break };
+            let mut stream_frame: crate::StreamFrame = match stream_frame_result { Ok(f) => f, _ => break };
 
-            let _image_data_bytes = &remainder_buffer[stream_frame_len as usize..]; // TODO: store on StreamFrame
+            let image_data_bytes = &remainder_buffer[stream_frame_len as usize..];
+            stream_frame.image_data = Some(crate::ImageData::Bytes(image_data_bytes.to_vec()));
 
             sender.send(stream_frame).unwrap();
         }

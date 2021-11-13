@@ -98,7 +98,7 @@ impl CaptureStream {
         inner.frame_number += 1;
 
         let status = if drop_frame { crate::FrameStatus::Dropped } else { crate::FrameStatus::Captured };
-        let image_data = buffer.map(|b| crate::ImageData(b));
+        let image_data = buffer.map(|b| crate::ImageData::Buffer(b));
         let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
@@ -111,12 +111,12 @@ impl CaptureStream {
         let inner = self.inner.borrow_mut();
 
         let stream_frame = inner.stream_frames.back().unwrap();
-        let image_data = match &stream_frame.image_data { Some(b) => b, _ => return };
+        let image_data = match &stream_frame.image_data { Some(d) => d, _ => return };
 
         let image_copy = inner.texture.image_copy_texture();
 
         let buffer_copy = wgpu::ImageCopyBuffer {
-            buffer: &image_data,
+            buffer: image_data.buffer(),
             layout: inner.texture.image_data_layout(stream_frame.padded_bytes_per_row as u32),
         };
 
@@ -130,8 +130,8 @@ impl CaptureStream {
             if inner.map_futures.get(i).is_some() { continue; }
             let stream_frame = &inner.stream_frames[i];
 
-            if let Some(buffer) = &stream_frame.image_data {
-                let future = buffer.slice(..).map_async(wgpu::MapMode::Read);
+            if let Some(image_data) = &stream_frame.image_data {
+                let future = image_data.buffer().slice(..).map_async(wgpu::MapMode::Read);
                 inner.map_futures.push_back(Some(MapFuture(future.boxed())));
             } else {
                 inner.map_futures.push_back(None);

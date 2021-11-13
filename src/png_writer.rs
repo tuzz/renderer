@@ -4,7 +4,7 @@ pub struct PngWriter;
 
 impl PngWriter {
     pub fn write_png(filename: &str, stream_frame: &crate::StreamFrame) -> Result<(), String> {
-        if stream_frame.image_data.is_none() {
+        if stream_frame.image_data.is_none() { // TODO: different variants
             return Err(format!("Frame {} was dropped due to capture_stream memory limit.", stream_frame.frame_number));
         }
 
@@ -15,11 +15,13 @@ impl PngWriter {
         png.set_color(png::ColorType::RGBA);
 
         let mut writer = png.write_header().unwrap().into_stream_writer_with_size(stream_frame.unpadded_bytes_per_row);
-        let image_data = stream_frame.image_data.as_ref().unwrap().slice(..).get_mapped_range();
+        let image_data = stream_frame.image_data.as_ref().unwrap();
 
-        for chunk in image_data.chunks(stream_frame.padded_bytes_per_row) {
-            writer.write_all(&chunk[..stream_frame.unpadded_bytes_per_row]).unwrap();
-        }
+        image_data.bytes_fn(|bytes| {
+            for chunk in bytes.chunks(stream_frame.padded_bytes_per_row) {
+                writer.write_all(&chunk[..stream_frame.unpadded_bytes_per_row]).unwrap();
+            }
+        });
 
         writer.finish().unwrap();
         Ok(())
