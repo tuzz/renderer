@@ -85,13 +85,29 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
     let mut expected_frame = 1;
 
     loop {
-        // Ask each worker for their next stream frame. Remove workers that have finished.
+        // Ask each worker for their next stream frame. If the stream frame doesn't
+        // have image data then ask again until one that does have image data is received.
+        //
+        // We need to do this to avoid decompression filling up memory when there's a run
+        // of dropped frames in the capture stream. What tends to happen is one of the
+        // compression threads picks up almost all of the dropped frames and writes it to
+        // its compressed file while the others are busy. If we always received frames in
+        // round robin from the decompression threads then we'd fill up memory from the
+        // threads that didn't process the dropped frames and are further ahead.
+        //
+        // Therefore, keep consuming until a frame with real image data is received so
+        // that we mimic the thread balancing pattern from the compression side.
         let drained = workers.drain_filter(|worker| {
-            if let Ok(stream_frame) = worker.receiver.recv() {
-                min_heap.push(cmp::Reverse(OrderableFrame(stream_frame)));
-                false
-            } else {
-                true
+            loop {
+                if let Ok(stream_frame) = worker.receiver.recv() {
+                    let has_image_data = stream_frame.image_data.is_some();
+
+                    min_heap.push(cmp::Reverse(OrderableFrame(stream_frame)));
+
+                    if has_image_data { return false; }
+                } else {
+                    return true; // The worker has run out of frames so remove it.
+                }
             }
         });
 

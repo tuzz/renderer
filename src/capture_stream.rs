@@ -84,10 +84,6 @@ impl CaptureStream {
         let prev_size = inner.buffer_size_in_bytes.fetch_add(frame_size_in_bytes, Relaxed);
         let drop_frame = prev_size > self.max_buffer_size_in_bytes;
 
-        // AtomicUsize wraps around so explicitly check if we've underflowed in case of a bug.
-        // If we undeflowed and didn't panic to draw attention to it, we'd always drop frames which is bad.
-        assert!(prev_size < 4_000_000_000, "buffer_size_in_bytes has underflowed");
-
         let buffer = if drop_frame {
             inner.buffer_size_in_bytes.fetch_sub(frame_size_in_bytes, Relaxed);
             None
