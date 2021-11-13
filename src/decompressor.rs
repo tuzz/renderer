@@ -139,39 +139,46 @@ fn spawn_worker(directory: &str, filename: &str) -> Worker {
     let file = fs::File::open(format!("{}/{}", directory, filename)).unwrap();
     let mut reader = BufReadDecompressor::new(BufReader::new(file)).unwrap();
 
-    let mut lengths_buffer = [0; U64_LEN + U64_LEN];
-    let mut remainder_buffer = vec![];
+    let mut packet_len_bytes = [0; U64_LEN];
+    let mut stream_frame_len_bytes = [0; U64_LEN];
+    let mut stream_frame_bytes = vec![];
 
     let thread = thread::spawn(move || {
         // Read decompressed bytes from the file. Decode each packet to a
         // StreamFrame and send it to the channel. The packets have this layout:
         //
         // [ packet_len | stream_frame_len | stream_frame | image_data ]
+        //     (u64)           (u64)          (bincode)        (raw)
         //
         // If the reader ends cleanly at the end of a packet then return.
         // Otherwise, send a StreamFrame to the channel with FrameStatus::Corrupt.
 
         loop {
-            match reader.read_exact(&mut lengths_buffer) { Ok(_) => {}, _ => return }
+            // Read and decode packet_len.
+            match reader.read_exact(&mut packet_len_bytes) { Ok(_) => {}, _ => return }
+            let packet_len = u64::from_be_bytes(packet_len_bytes) as usize;
 
-            let packet_len_bytes = &lengths_buffer[0..U64_LEN];
-            let packet_len_result = bincode::decode_from_slice(packet_len_bytes, decode_config);
-            let packet_len: u64 = match packet_len_result { Ok(p) => p, _ => break };
+            // Read and decode stream_frame_len.
+            match reader.read_exact(&mut stream_frame_len_bytes) { Ok(_) => {}, _ => break }
+            let stream_frame_len = u64::from_be_bytes(stream_frame_len_bytes) as usize;
 
-            let stream_frame_len_bytes = &lengths_buffer[U64_LEN..];
-            let stream_frame_len_result = bincode::decode_from_slice(stream_frame_len_bytes, decode_config);
-            let stream_frame_len: u64 = match stream_frame_len_result { Ok(p) => p, _ => break };
+            // Read stream_frame.
+            stream_frame_bytes.resize(stream_frame_len, 0);
+            match reader.read_exact(&mut stream_frame_bytes) { Ok(_) => {}, _ => break }
 
-            let remainder_len = packet_len as usize - U64_LEN - U64_LEN;
-            remainder_buffer.resize(remainder_len, 0);
-            match reader.read_exact(&mut remainder_buffer) { Ok(_) => {}, _ => break }
+            // Decode stream_frame.
+            let result = bincode::decode_from_slice(&stream_frame_bytes, decode_config);
+            let mut stream_frame: crate::StreamFrame = match result { Ok(f) => f, _ => break }; // TODO: advance to next packet instead of breaking
 
-            let stream_frame_bytes = &remainder_buffer[0..stream_frame_len as usize];
-            let stream_frame_result = bincode::decode_from_slice(stream_frame_bytes, decode_config);
-            let mut stream_frame: crate::StreamFrame = match stream_frame_result { Ok(f) => f, _ => break };
+            if stream_frame.image_data.is_some() {
+                // Read image_data.
+                let remainder_len = packet_len - U64_LEN - U64_LEN - stream_frame_len;
+                let mut image_data_bytes = vec![0; remainder_len];
+                match reader.read_exact(&mut image_data_bytes) { Ok(_) => {}, _ => break } // TODO: advance to next packet instead of breaking
 
-            let image_data_bytes = &remainder_buffer[stream_frame_len as usize..];
-            stream_frame.image_data = Some(crate::ImageData::Bytes(image_data_bytes.to_vec()));
+                // Decode image_data.
+                stream_frame.image_data = Some(crate::ImageData::Bytes(image_data_bytes));
+            }
 
             sender.send(stream_frame).unwrap();
         }

@@ -87,6 +87,7 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
         // compressor in packets of bytes that have this layout:
         //
         // [ packet_len | stream_frame_len | stream_frame | image_data ]
+        //     (u64)           (u64)          (bincode)        (raw)
 
         loop {
             let mut packet_len: u64 = (U64_LEN + U64_LEN) as u64;
@@ -107,11 +108,8 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
                 });
             }
 
-            let packet_len_bytes = bincode::encode_to_vec(packet_len, encode_config).unwrap();
-            let stream_frame_len_bytes =  bincode::encode_to_vec(stream_frame_len, encode_config).unwrap();
-
-            writer.write_all(&packet_len_bytes).unwrap();
-            writer.write_all(&stream_frame_len_bytes).unwrap();
+            writer.write_all(&packet_len.to_be_bytes()).unwrap();
+            writer.write_all(&stream_frame_len.to_be_bytes()).unwrap();
             writer.write_all(&stream_frame_bytes).unwrap();
             write_image_data_bytes.map(|closure| closure(&mut writer));
         }
