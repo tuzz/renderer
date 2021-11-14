@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, sync::Arc};
+use std::{path::Path, sync::Arc};
 use winit::{event, event_loop, window};
 
 const A_POSITION: usize = 0;
@@ -96,15 +96,18 @@ fn main() {
     }));
 
     // 2) Decompress and process this data later:
-    let decompressor = renderer::Decompressor::new("captured_frames", true);
-    decompressor.decompress_from_disk(Arc::new(|stream_frame| {
-        let png_bytes = renderer::PngEncoder::encode_to_bytes(stream_frame);
+    if Path::new("captured_frames").exists() {
+        println!("Creating a video of the last run of this example:");
 
-        let filename = format!("frame-{:0>8}.png", stream_frame.frame_number);
-        println!("Captured {} from the the last run of this example.", filename);
+        let decompressor = renderer::Decompressor::new("captured_frames", true);
+        let mut ffmpeg_pipe = renderer::FfmpegPipe::new();
 
-        File::create(filename).unwrap().write_all(&png_bytes).unwrap();
-    }), Box::new(|_, _| {}));
+        decompressor.decompress_from_disk(Arc::new(|stream_frame| {
+            renderer::PngEncoder::encode_to_bytes(stream_frame)
+        }), Box::new(move |_stream_frame, result| {
+            if let Ok(Ok(png)) = result { ffmpeg_pipe.write(&png); }
+        }));
+    }
 
     // Alternatively, you could skip compression/decompression and write PNGs directly.
     // This is slower but might be fine for your use case. Bring your own concurrecncy.
