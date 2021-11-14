@@ -22,4 +22,4 @@ winit = "0.25"
 shader_compilation = ["shaderc"]
 capture_to_png = ["png"]
 capture_compression = ["bincode", "chrono", "crossbeam-channel", "lzzzz", "num_cpus"]
-all = ["shader_compilation", "capture_to_png", "capture_compression"]
+pipe_to_ffmpeg = ["chrono"]

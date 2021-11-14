@@ -102,10 +102,11 @@ fn main() {
         let decompressor = renderer::Decompressor::new("captured_frames", true);
         let mut ffmpeg_pipe = renderer::FfmpegPipe::new();
 
-        decompressor.decompress_from_disk(Arc::new(|stream_frame| {
+        decompressor.decompress_from_disk(Arc::new(|stream_frame, _timestamp| {
             renderer::PngEncoder::encode_to_bytes(stream_frame)
-        }), Box::new(move |_stream_frame, result| {
-            if let Ok(Ok(png)) = result { ffmpeg_pipe.write(&png); }
+        }), Box::new(move |stream_frame, result, timestamp| {
+            let png = if let Ok(Ok(png)) = result { png } else { vec![] };
+            ffmpeg_pipe.write(&stream_frame, &png, Some(timestamp));
         }));
     }
 

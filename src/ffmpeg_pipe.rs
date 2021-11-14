@@ -1,29 +1,42 @@
 use std::process::{Command, Child, Stdio};
 use std::io::Write;
 use std::thread;
+use chrono::{DateTime, Utc};
 
 pub struct FfmpegPipe {
-    child: Option<Child>,
+    process: Option<Process>,
+}
+
+struct Process {
+    child: Child,
+    timestamp: String,
 }
 
 impl FfmpegPipe {
     pub fn new() -> Self {
-        Self { child: None }
+        Self { process: None }
     }
 
     pub fn available() -> bool {
         Command::new("ffmpeg").arg("-loglevel").arg("error").spawn().is_ok()
     }
 
-    pub fn write(&mut self, png_bytes: &[u8]) {
-        if self.child.is_none() {
-            self.child = Some(spawn_process());
+    pub fn write(&mut self, stream_frame: &crate::StreamFrame, png_bytes: &[u8], timestamp: Option<&DateTime<Utc>>) {
+        self.re_spawn_if_new_capture_timestamp(stream_frame);
+
+//
+//        if self.child.is_none() { self.child = Some(spawn_process()); }
+//
+//        let child = self.child.as_mut().unwrap();
+//        let stdin = child.stdin.as_mut().unwrap();
+//
+//        stdin.write_all(png_bytes).unwrap();
+    }
+
+    fn re_spawn_if_new_capture_timestamp(&mut self, stream_frame: &crate::StreamFrame) {
+        if let Some(process) = self.process.as_ref() {
+            //if process.timestamp != stream_frame.timestamp
         }
-
-        let child = self.child.as_mut().unwrap();
-        let stdin = child.stdin.as_mut().unwrap();
-
-        stdin.write_all(png_bytes).unwrap();
     }
 }
 
@@ -55,7 +68,8 @@ fn spawn_process() -> Child {
 
 impl Drop for FfmpegPipe {
     fn drop(&mut self) {
-        let result = match self.child.take() { Some(mut c) => c.wait(), _ => return };
+        let mut process = match self.process.take() { Some(p) => p, _ => return };
+        let result = process.child.wait();
 
         // Don't panic while panicking if stdin already closed (broken pipe).
         if thread::panicking() { return; }

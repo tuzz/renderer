@@ -15,8 +15,8 @@ struct Worker<T> {
     pub receiver: Receiver<(crate::StreamFrame, T)>,
 }
 
-pub type PerThreadFunction<T> = Arc<dyn Fn(&crate::StreamFrame) -> T + Send + Sync>;
-pub type InOrderFunction<T> = Box<dyn FnMut(crate::StreamFrame, Result<T, &'static str>)>;
+pub type PerThreadFunction<T> = Arc<dyn Fn(&crate::StreamFrame, DateTime<Utc>) -> T + Send + Sync>;
+pub type InOrderFunction<T> = Box<dyn FnMut(crate::StreamFrame, Result<T, &'static str>, &DateTime<Utc>)>;
 
 impl Decompressor {
     pub fn new(directory: &str, remove_files_after_decompression: bool) -> Self {
@@ -26,14 +26,14 @@ impl Decompressor {
     pub fn decompress_from_disk<T: Send + 'static>(&self, per_thread_function: PerThreadFunction<T>, mut in_order_function: InOrderFunction<T>) {
         let mut ordered_timestamps = scan_directory_for_timestamps(&self.directory);
 
-        for (_timestamp, filenames) in ordered_timestamps.iter_mut() {
+        for (timestamp, filenames) in ordered_timestamps.iter_mut() {
             filenames.sort();
 
             let workers = filenames.iter().map(|filename| {
-                spawn_worker(&self.directory, &filename, &per_thread_function)
+                spawn_worker(&self.directory, &filename, &per_thread_function, timestamp)
             }).collect();
 
-            order_frames_from_worker_threads(workers, &mut in_order_function);
+            order_frames_from_worker_threads(workers, &mut in_order_function, timestamp);
         }
 
         // Wait until the very end before removing files in case a panic happens mid-way through.
@@ -85,7 +85,7 @@ fn recover_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>, ()> 
     Ok(timestamp.into())
 }
 
-fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_function: &mut InOrderFunction<T>) {
+fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_function: &mut InOrderFunction<T>, timestamp: &DateTime<Utc>) {
     let mut min_heap = BinaryHeap::new();
     let mut expected_frame = 1;
 
@@ -132,7 +132,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
 
             if min_frame.0.frame_number == expected_frame {
                 let (stream_frame, t) = min_frame.0.0;
-                in_order_function(stream_frame, Ok(t));
+                in_order_function(stream_frame, Ok(t), timestamp);
 
                 expected_frame += 1;
                 advanced_by_at_least_one_frame = true;
@@ -165,6 +165,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
                     ..Default::default()
                 },
                 Err("The frame was missing from the compressed files."),
+                timestamp,
             );
 
             expected_frame += 1;
@@ -174,7 +175,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
     }
 }
 
-fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_function: &PerThreadFunction<T>) -> Worker<T> {
+fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_function: &PerThreadFunction<T>, timestamp: &DateTime<Utc>) -> Worker<T> {
     // Usually the slow part of the code will be the actual processing rather
     // than decompressing and decoding stream frames. Therefore, bound the
     // channel size to 0 to keep memory usage down. This forces worker threads
@@ -182,6 +183,7 @@ fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_f
     let (sender, receiver) = crossbeam_channel::bounded(0);
 
     let per_thread_function = Arc::clone(per_thread_function);
+    let timestamp = timestamp.clone();
     let decode_config = decoding_config();
 
     let file = fs::File::open(format!("{}/{}", directory, filename)).unwrap();
@@ -228,7 +230,7 @@ fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_f
                 stream_frame.image_data = Some(crate::ImageData::Bytes(image_data_bytes));
             }
 
-            let t = per_thread_function(&stream_frame);
+            let t = per_thread_function(&stream_frame, timestamp);
             sender.send((stream_frame, t)).unwrap();
         }
 
