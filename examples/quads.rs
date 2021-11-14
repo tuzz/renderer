@@ -96,7 +96,7 @@ fn main() {
     }));
 
     // 2) Decompress and process this data later:
-    if Path::new("captured_frames").exists() {
+    if Path::new("captured_frames").exists() && renderer::FfmpegPipe::available() {
         println!("Creating a video of the last run of this example:");
 
         let decompressor = renderer::Decompressor::new("captured_frames", true);

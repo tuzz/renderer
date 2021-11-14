@@ -11,6 +11,10 @@ impl FfmpegPipe {
         Self { child: None }
     }
 
+    pub fn available() -> bool {
+        Command::new("ffmpeg").arg("-loglevel").arg("error").spawn().is_ok()
+    }
+
     pub fn write(&mut self, png_bytes: &[u8]) {
         if self.child.is_none() {
             self.child = Some(spawn_process());
