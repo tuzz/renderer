@@ -3,16 +3,20 @@ use std::io::{Cursor, Write};
 pub struct PngEncoder;
 
 impl PngEncoder {
-    pub fn encode_to_bytes(stream_frame: &crate::StreamFrame) -> Vec<u8> {
+    pub fn encode_to_bytes(stream_frame: &crate::StreamFrame) -> Result<Vec<u8>, &'static str> {
         let mut bytes = vec![];
 
         let cursor = Cursor::new(&mut bytes);
-        Self::encode(stream_frame, cursor);
+        let result = Self::encode(stream_frame, cursor);
 
-        bytes
+        result.map(|_| bytes)
     }
 
-    pub fn encode<W: Write>(stream_frame: &crate::StreamFrame, writer: W) {
+    pub fn encode<W: Write>(stream_frame: &crate::StreamFrame, writer: W) -> Result<(), &'static str> {
+        if stream_frame.image_data.is_none() {
+            return Err("StreamFrame could not be written because image_data is None.")
+        }
+
         let mut png = png::Encoder::new(writer, stream_frame.width as u32, stream_frame.height as u32);
 
         png.set_depth(png::BitDepth::Eight);
@@ -30,5 +34,6 @@ impl PngEncoder {
         });
 
         stream_writer.finish().unwrap();
+        Ok(())
     }
 }
