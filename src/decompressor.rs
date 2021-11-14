@@ -10,27 +10,30 @@ pub struct Decompressor {
     pub remove_files_after_decompression: bool,
 }
 
-struct Worker {
+struct Worker<T> {
     pub thread: thread::JoinHandle<()>,
-    pub receiver: Receiver<crate::StreamFrame>,
+    pub receiver: Receiver<(crate::StreamFrame, T)>,
 }
+
+pub type PerThreadFunction<T> = Arc<dyn Fn(&crate::StreamFrame) -> T + Send + Sync>;
+pub type InOrderFunction<T> = Box<dyn FnMut(crate::StreamFrame, Option<T>)>;
 
 impl Decompressor {
     pub fn new(directory: &str, remove_files_after_decompression: bool) -> Self {
         Self { directory: directory.to_string(), remove_files_after_decompression }
     }
 
-    pub fn decompress_from_disk(&self, mut process_function: Box<dyn FnMut(crate::StreamFrame)>) {
+    pub fn decompress_from_disk<T: Send + 'static>(&self, per_thread_function: PerThreadFunction<T>, mut in_order_function: InOrderFunction<T>) {
         let mut ordered_timestamps = scan_directory_for_timestamps(&self.directory);
 
         for (_timestamp, filenames) in ordered_timestamps.iter_mut() {
             filenames.sort();
 
             let workers = filenames.iter().map(|filename| {
-                spawn_worker(&self.directory, &filename)
+                spawn_worker(&self.directory, &filename, &per_thread_function)
             }).collect();
 
-            order_frames_from_worker_threads(workers, &mut process_function);
+            order_frames_from_worker_threads(workers, &mut in_order_function);
         }
 
         // Wait until the very end before removing files in case a panic happens mid-way through.
@@ -80,7 +83,7 @@ fn recover_timestamp_from_filename(filename: &str) -> Result<DateTime<Utc>, ()> 
     Ok(timestamp.into())
 }
 
-fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: &mut Box<dyn FnMut(crate::StreamFrame)>) {
+fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_function: &mut InOrderFunction<T>) {
     let mut min_heap = BinaryHeap::new();
     let mut expected_frame = 1;
 
@@ -99,10 +102,10 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
         // that we mimic the thread balancing pattern from the compression side.
         let drained = workers.drain_filter(|worker| {
             loop {
-                if let Ok(stream_frame) = worker.receiver.recv() {
+                if let Ok((stream_frame, t)) = worker.receiver.recv() {
                     let has_image_data = stream_frame.image_data.is_some();
 
-                    min_heap.push(cmp::Reverse(OrderableFrame(stream_frame)));
+                    min_heap.push(cmp::Reverse(OrderableFrame((stream_frame, t))));
 
                     if has_image_data { return false; }
                 } else {
@@ -126,7 +129,9 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
             };
 
             if min_frame.0.frame_number == expected_frame {
-                process_function(min_frame.0.0);
+                let (stream_frame, t) = min_frame.0.0;
+                in_order_function(stream_frame, Some(t));
+
                 expected_frame += 1;
                 advanced_by_at_least_one_frame = true;
             } else {
@@ -146,16 +151,19 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
         // If we are missing data then yield StreamFrames with a status of Corrupt so
         // that the calling code can decide what to do.
 
-        let next_available_frame = min_heap.peek().unwrap().0.0.frame_number;
+        let next_available_frame = min_heap.peek().unwrap().0.frame_number;
 
         loop {
-            process_function(crate::StreamFrame {
-                status: crate::FrameStatus::Missing,
-                image_data: None,
-                frame_number: expected_frame,
-                buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
-                ..Default::default()
-            });
+            in_order_function(
+                crate::StreamFrame {
+                    status: crate::FrameStatus::Missing,
+                    image_data: None,
+                    frame_number: expected_frame,
+                    buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
+                    ..Default::default()
+                },
+                None,
+            );
 
             expected_frame += 1;
 
@@ -164,13 +172,14 @@ fn order_frames_from_worker_threads(mut workers: Vec<Worker>, process_function: 
     }
 }
 
-fn spawn_worker(directory: &str, filename: &str) -> Worker {
+fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_function: &PerThreadFunction<T>) -> Worker<T> {
     // Usually the slow part of the code will be the actual processing rather
     // than decompressing and decoding stream frames. Therefore, bound the
     // channel size to 0 to keep memory usage down. This forces worker threads
     // to wait for the main thread to be ready before decoding their next frame.
     let (sender, receiver) = crossbeam_channel::bounded(0);
 
+    let per_thread_function = Arc::clone(per_thread_function);
     let decode_config = decoding_config();
 
     let file = fs::File::open(format!("{}/{}", directory, filename)).unwrap();
@@ -217,7 +226,8 @@ fn spawn_worker(directory: &str, filename: &str) -> Worker {
                 stream_frame.image_data = Some(crate::ImageData::Bytes(image_data_bytes));
             }
 
-            sender.send(stream_frame).unwrap();
+            let t = per_thread_function(&stream_frame);
+            sender.send((stream_frame, t)).unwrap();
         }
 
         // TODO: corrupt frame
@@ -232,32 +242,32 @@ fn decoding_config() -> bincode::config::Configuration {
     bincode::config::Configuration::standard()
 }
 
-struct OrderableFrame(crate::StreamFrame);
+struct OrderableFrame<T>((crate::StreamFrame, T));
 
-impl ops::Deref for OrderableFrame {
+impl<T> ops::Deref for OrderableFrame<T> {
     type Target = crate::StreamFrame;
 
     fn deref(&self) -> &Self::Target {
-        &self.0
+        &self.0.0
     }
 }
 
-impl cmp::Ord for OrderableFrame {
+impl<T> cmp::Ord for OrderableFrame<T> {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
         self.frame_number.cmp(&other.frame_number)
     }
 }
 
-impl cmp::PartialOrd for OrderableFrame {
+impl<T> cmp::PartialOrd for OrderableFrame<T> {
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         self.frame_number.partial_cmp(&other.frame_number)
     }
 }
 
-impl cmp::PartialEq for OrderableFrame {
+impl<T> cmp::PartialEq for OrderableFrame<T> {
     fn eq(&self, other: &Self) -> bool {
         self.frame_number.eq(&other.frame_number)
     }
 }
 
-impl cmp::Eq for OrderableFrame {}
+impl<T> cmp::Eq for OrderableFrame<T> {}

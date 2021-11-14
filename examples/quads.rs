@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use winit::{event, event_loop, window};
 
 const A_POSITION: usize = 0;
@@ -97,7 +98,9 @@ fn main() {
     // 2) Decompress and process this data later:
     let decompressor = renderer::Decompressor::new("captured_frames", true);
     let png_writer = renderer::PngWriter::new();
-    decompressor.decompress_from_disk(Box::new(move |stream_frame| {
+    decompressor.decompress_from_disk(Arc::new(|_stream_frame| {
+        // TODO: encode to png here
+    }), Box::new(move |stream_frame, _png_option| {
         let filename = format!("frame-{:0>8}.png", stream_frame.frame_number);
 
         println!("Captured {} from the the last run of this example.", filename);
