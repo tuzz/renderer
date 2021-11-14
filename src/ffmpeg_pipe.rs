@@ -9,7 +9,7 @@ pub struct FfmpegPipe {
 
 struct Process {
     child: Child,
-    timestamp: String,
+    timestamp: DateTime<Utc>,
 }
 
 impl FfmpegPipe {
@@ -21,49 +21,51 @@ impl FfmpegPipe {
         Command::new("ffmpeg").arg("-loglevel").arg("error").spawn().is_ok()
     }
 
-    pub fn write(&mut self, stream_frame: &crate::StreamFrame, png_bytes: &[u8], timestamp: Option<&DateTime<Utc>>) {
-        self.re_spawn_if_new_capture_timestamp(stream_frame);
+    pub fn write(&mut self, _stream_frame: &crate::StreamFrame, png_bytes: &[u8], timestamp: Option<&DateTime<Utc>>) {
+        self.re_spawn_if_new_capture_timestamp(timestamp);
 
-//
-//        if self.child.is_none() { self.child = Some(spawn_process()); }
-//
-//        let child = self.child.as_mut().unwrap();
-//        let stdin = child.stdin.as_mut().unwrap();
-//
-//        stdin.write_all(png_bytes).unwrap();
+        let process = self.process.as_mut().unwrap();
+        let stdin = process.child.stdin.as_mut().unwrap();
+
+        stdin.write_all(png_bytes).unwrap();
     }
 
-    fn re_spawn_if_new_capture_timestamp(&mut self, stream_frame: &crate::StreamFrame) {
-        if let Some(process) = self.process.as_ref() {
-            //if process.timestamp != stream_frame.timestamp
+    fn re_spawn_if_new_capture_timestamp(&mut self, timestamp: Option<&DateTime<Utc>>) {
+        match (timestamp, self.process.as_ref().map(|p| p.timestamp)) {
+            (Some(t1), Some(t2)) if *t1 != t2 => { self.process = None; }
+            _ => {},
         }
-    }
-}
 
-fn spawn_process() -> Child {
-    Command::new("ffmpeg")
-        .arg("-hide_banner")
-        .arg("-loglevel")
-        .arg("error")
-        .arg("-stats")
-        .arg("-f")
-        .arg("image2pipe")
-        .arg("-y")
-        .arg("-framerate")
-        .arg("60")
-        .arg("-i")
-        .arg("-")
-        .arg("-c:v")
-        .arg("libx264")
-        .arg("-r")
-        .arg("60")
-        .arg("-pix_fmt")
-        .arg("yuv420p")
-        .arg("out.mp4")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap()
+        if self.process.is_some() { return; }
+
+        let child = Command::new("ffmpeg")
+            .arg("-hide_banner")
+            .arg("-loglevel")
+            .arg("error")
+            .arg("-stats")
+            .arg("-f")
+            .arg("image2pipe")
+            .arg("-y")
+            .arg("-framerate")
+            .arg("60")
+            .arg("-i")
+            .arg("-")
+            .arg("-c:v")
+            .arg("libx264")
+            .arg("-r")
+            .arg("60")
+            .arg("-pix_fmt")
+            .arg("yuv420p")
+            .arg("out.mp4")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        let timestamp = timestamp.cloned().unwrap_or_else(|| Utc::now());
+
+        self.process = Some(Process { child, timestamp });
+    }
 }
 
 impl Drop for FfmpegPipe {
