@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fs::File, io::Write, sync::Arc};
 use winit::{event, event_loop, window};
 
 const A_POSITION: usize = 0;
@@ -97,15 +97,17 @@ fn main() {
 
     // 2) Decompress and process this data later:
     let decompressor = renderer::Decompressor::new("captured_frames", true);
-    let png_writer = renderer::PngWriter::new();
-    decompressor.decompress_from_disk(Arc::new(|_stream_frame| {
-        // TODO: encode to png here
-    }), Box::new(move |stream_frame, _png_option| {
-        let filename = format!("frame-{:0>8}.png", stream_frame.frame_number);
+    decompressor.decompress_from_disk(Arc::new(|stream_frame| {
+        let png_bytes = renderer::PngEncoder::encode_to_bytes(stream_frame);
 
+        let filename = format!("frame-{:0>8}.png", stream_frame.frame_number);
         println!("Captured {} from the the last run of this example.", filename);
-        let _ = png_writer.write_png(stream_frame, filename);
-    }));
+
+        File::create(filename).unwrap().write_all(&png_bytes).unwrap();
+    }), Box::new(|_, _| {}));
+
+    // Alternatively, you could skip compression/decompression and write PNGs directly.
+    // This is slower but might be fine for your use case. Bring your own concurrecncy.
 
     // Set the start position of each quad and its velocity in the x, y directions.
     let mut x1 = (0.3, 0.015);
