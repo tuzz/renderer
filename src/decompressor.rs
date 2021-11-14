@@ -16,7 +16,7 @@ struct Worker<T> {
 }
 
 pub type PerThreadFunction<T> = Arc<dyn Fn(&crate::StreamFrame) -> T + Send + Sync>;
-pub type InOrderFunction<T> = Box<dyn FnMut(crate::StreamFrame, Option<T>)>;
+pub type InOrderFunction<T> = Box<dyn FnMut(crate::StreamFrame, Result<T, &'static str>)>;
 
 impl Decompressor {
     pub fn new(directory: &str, remove_files_after_decompression: bool) -> Self {
@@ -132,7 +132,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
 
             if min_frame.0.frame_number == expected_frame {
                 let (stream_frame, t) = min_frame.0.0;
-                in_order_function(stream_frame, Some(t));
+                in_order_function(stream_frame, Ok(t));
 
                 expected_frame += 1;
                 advanced_by_at_least_one_frame = true;
@@ -150,7 +150,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
         // This isn't the same as a frame being dropped during capture as those still
         // appear in the compressed data as StreamFrames with status=Dropped.
         //
-        // If we are missing data then yield StreamFrames with a status of Corrupt so
+        // If we are missing data then yield StreamFrames with a status of Missing so
         // that the calling code can decide what to do.
 
         let next_available_frame = min_heap.peek().unwrap().0.frame_number;
@@ -164,7 +164,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
                     buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
                     ..Default::default()
                 },
-                None,
+                Err("The frame was missing from the compressed files."),
             );
 
             expected_frame += 1;
