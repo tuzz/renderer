@@ -16,7 +16,7 @@ num_cpus = { version = "1.13.0", optional = true }
 png = { version = "0.16", optional = true }
 shaderc = { version = "0.7", optional = true }
 wgpu = { version = "0.11.0", features = ["spirv"] }
-winit = "0.25"
+winit = "0.24"
 
 [features]
 shader_compilation = ["shaderc"]
