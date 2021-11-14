@@ -50,7 +50,9 @@ impl Decompressor {
 fn scan_directory_for_timestamps(directory: &str) -> BTreeMap<DateTime<Utc>, Vec<String>> {
     let mut map = BTreeMap::new();
 
-    for result in fs::read_dir(directory).unwrap() {
+    let listing = match fs::read_dir(directory) { Ok(d) => d, _ => return map };
+
+    for result in listing {
         let dir_entry = match result { Ok(d) => d, _ => continue };
 
         let result = dir_entry.metadata();
