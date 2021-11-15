@@ -90,7 +90,7 @@ fn main() {
     // This is very CPU and data intensive (2GB/s at 4K60) so it's recommended to:
     //
     // 1) Compress the raw frame data to disk:
-    let compressor = renderer::Compressor::new("captured_frames", None, 0);
+    let compressor = renderer::Compressor::new("captured_frames", None, 0, true);
     renderer.set_capture_stream(&[&pipeline], Some(clear_color), 500., Box::new(move |stream_frame| {
         compressor.compress_to_disk(stream_frame);
     }));

@@ -1,5 +1,5 @@
-use std::{mem, fs, thread, time, io::{Write, BufWriter}};
-use chrono::{SecondsFormat, Utc};
+use std::{mem, fs, thread, time, io::{Write, BufWriter}, cell::RefCell, sync::atomic::Ordering};
+use chrono::{DateTime, SecondsFormat, Utc};
 use crossbeam_channel::{Sender, Receiver};
 use lzzzz::lz4f;
 
@@ -7,10 +7,11 @@ pub struct Compressor {
     pub timestamp: String,
     pub threads: Vec<thread::JoinHandle<()>>,
     pub sender: Option<Sender<crate::StreamFrame>>,
+    pub stats: Option<RefCell<Stats>>,
 }
 
 impl Compressor {
-    pub fn new(directory: &str, max_frames_queued: Option<usize>, lz4_compression_level: u8) -> Self {
+    pub fn new(directory: &str, max_frames_queued: Option<usize>, lz4_compression_level: u8, print_stats: bool) -> Self {
         let is_valid_level = lz4_compression_level as i32 <= lz4f::CLEVEL_MAX;
         assert!(is_valid_level, "Please choose a compression level in the range 0..={}", lz4f::CLEVEL_MAX);
 
@@ -23,11 +24,22 @@ impl Compressor {
             spawn_thread(&receiver, &directory, &timestamp, i, lz4_compression_level)
         }).collect();
 
-        Compressor { timestamp, threads, sender: Some(sender) }
+        let mut stats = None;
+        if print_stats {
+            stats = Some(RefCell::new(Stats::new(directory, lz4_compression_level, max_frames_queued)));
+        }
+
+        Compressor { timestamp, threads, sender: Some(sender), stats }
     }
 
     pub fn compress_to_disk(&self, stream_frame: crate::StreamFrame) {
-        self.sender.as_ref().unwrap().send(stream_frame).unwrap();
+        let sender = self.sender.as_ref().unwrap();
+
+        if let Some(stats) = self.stats.as_ref() {
+            stats.borrow_mut().update(&stream_frame, &self.timestamp, self.threads.len(), sender.len());
+        }
+
+        sender.send(stream_frame).unwrap();
     }
 
     pub fn finish(&mut self) {
@@ -129,4 +141,100 @@ fn compression_config(lz4_compression_level: u8) -> lz4f::Preferences {
 
 fn encoding_config() -> bincode::config::Configuration {
     bincode::config::Configuration::standard()
+}
+
+#[derive(Default)]
+pub struct Stats {
+    pub directory: String,
+    pub lz4_compression_level: u8,
+    pub max_frames_queued: Option<usize>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub frames_captured: usize,
+    pub frames_dropped: usize,
+    pub has_resized: bool,
+    pub prev_width: usize,
+    pub prev_height: usize,
+    pub raw_video_size: usize,
+}
+
+impl Stats {
+    fn new(directory: &str, lz4_compression_level: u8, max_frames_queued: Option<usize>) -> Self {
+        Self {
+            directory: directory.to_string(),
+            lz4_compression_level,
+            max_frames_queued,
+            ..Self::default()
+        }
+    }
+
+    fn update(&mut self, stream_frame: &crate::StreamFrame, filename_timestamp: &str, num_threads: usize, queue_size: usize) {
+        match &stream_frame.status {
+            crate::FrameStatus::Captured => {
+                self.frames_captured += 1;
+                self.raw_video_size += stream_frame.frame_size_in_bytes;
+
+                if self.frames_captured > 1 {
+                    self.has_resized |= stream_frame.width != self.prev_width;
+                    self.has_resized |= stream_frame.height != self.prev_height;
+                } else {
+                    self.started_at = Some(Utc::now());
+                }
+
+                self.prev_width = stream_frame.width;
+                self.prev_height = stream_frame.height;
+            },
+            crate::FrameStatus::Dropped => {
+                self.frames_dropped += 1;
+            },
+            _ => unreachable!(),
+        }
+
+        if stream_frame.frame_number % 60 != 0 { return; }
+
+        let started_at = *self.started_at.as_ref().unwrap();
+        let elapsed = (Utc::now() - started_at).to_std().unwrap().as_secs();
+
+        print!("{esc}c", esc = 27 as char); // Clear terminal.
+
+        println!("Capturing frames to disk...");
+        println!("Directory: {}", self.directory);
+        println!();
+        println!("Started at: {}", started_at.to_rfc3339_opts(SecondsFormat::Millis, true));
+        println!("Duration: {:02}:{:02}:{:02}", elapsed / 3600, (elapsed % 3600) / 60, elapsed % 60);
+        println!();
+        println!("Frames captured: {}", self.frames_captured);
+        println!("Frames dropped: {}", self.frames_dropped);
+        println!();
+        println!("Average frame rate: {:.1} Hz", stream_frame.frame_number as f32 / elapsed as f32);
+        println!("Average frame size: {:.2} MB", self.raw_video_size as f32 / self.frames_captured as f32 / 1000. / 1000.);
+        println!();
+        println!("Current resolution: {}x{}", stream_frame.width, stream_frame.height);
+        println!("Viewport has resized: {}", if self.has_resized { "Yes" } else { "No" });
+        println!();
+        println!("Raw video size: {:.1} GB", self.raw_video_size as f32 / 1000. / 1000. / 1000.);
+
+        let mut size_on_disk = 0;
+        for result in fs::read_dir(&self.directory).unwrap() {
+            let dir_entry = match result { Ok(d) => d, _ => continue };
+            let filename = match dir_entry.file_name().into_string() { Ok(s) => s, _ => continue };
+            if !filename.contains(filename_timestamp) { continue; }
+
+            let num_bytes = dir_entry.metadata().unwrap().len();
+            size_on_disk += num_bytes;
+        }
+
+        println!("Compressed size on disk: {:.1} GB", size_on_disk as f32 / 1000. / 1000. / 1000.);
+        println!();
+
+        if let Some(queue_limit) = self.max_frames_queued.as_ref() {
+            println!("Compression queue size: {} (limit={})", queue_size, queue_limit);
+        } else {
+            println!("Compression queue size: {} (no limit)", queue_size);
+        }
+
+        println!("Compression worker threads: {}", num_threads);
+        println!();
+        println!("LZ4 compression level: {}", self.lz4_compression_level);
+        println!("GPU memory buffer size: {:.1} MB", stream_frame.buffer_size_in_bytes.load(Ordering::Relaxed) as f32 / 1000. / 1000.);
+    }
 }
