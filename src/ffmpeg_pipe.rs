@@ -1,20 +1,17 @@
 use std::process::{Command, Child, Stdio};
 use std::io::Write;
 use std::thread;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, SecondsFormat};
 
 pub struct FfmpegPipe {
-    process: Option<Process>,
-}
-
-struct Process {
-    child: Child,
-    timestamp: DateTime<Utc>,
+    pub child: Option<Child>,
+    pub timestamp: Option<DateTime<Utc>>,
+    pub filename: Option<String>,
 }
 
 impl FfmpegPipe {
-    pub fn new() -> Self {
-        Self { process: None }
+    pub fn new(filename: Option<&str>) -> Self {
+        Self { child: None, timestamp: None, filename: filename.map(|s| s.to_string()) }
     }
 
     pub fn available() -> bool {
@@ -22,23 +19,34 @@ impl FfmpegPipe {
     }
 
     pub fn write(&mut self, _stream_frame: &crate::StreamFrame, png_bytes: &[u8], timestamp: Option<&DateTime<Utc>>) {
-        self.re_spawn_if_new_capture_timestamp(timestamp);
+        if self.child.is_none() || self.timestamp_has_changed(timestamp) {
+            self.re_spawn_process(timestamp);
+        }
 
-        let process = self.process.as_mut().unwrap();
-        let stdin = process.child.stdin.as_mut().unwrap();
+        let child = self.child.as_mut().unwrap();
+        let stdin = child.stdin.as_mut().unwrap();
 
         stdin.write_all(png_bytes).unwrap();
     }
 
-    fn re_spawn_if_new_capture_timestamp(&mut self, timestamp: Option<&DateTime<Utc>>) {
-        match (timestamp, self.process.as_ref().map(|p| p.timestamp)) {
-            (Some(t1), Some(t2)) if *t1 != t2 => { self.process = None; }
-            _ => {},
+    fn timestamp_has_changed(&self, timestamp: Option<&DateTime<Utc>>) -> bool {
+        if timestamp == self.timestamp.as_ref() { return false; }
+
+        if let Some(filename) = self.filename.as_ref() {
+            eprintln!("Warning: Compressed data contains multiple videos but only writing one file: {}", filename);
         }
 
-        if self.process.is_some() { return; }
+        true
+    }
 
-        let child = Command::new("ffmpeg")
+    fn re_spawn_process(&mut self, timestamp: Option<&DateTime<Utc>>) {
+        self.timestamp = timestamp.cloned();
+
+        if self.filename.is_none() {
+            self.filename = Some(filename_for(timestamp));
+        }
+
+        self.child = Some(Command::new("ffmpeg")
             .arg("-hide_banner")
             .arg("-loglevel")
             .arg("error")
@@ -56,22 +64,26 @@ impl FfmpegPipe {
             .arg("60")
             .arg("-pix_fmt")
             .arg("yuv420p")
-            .arg("out.mp4")
+            .arg(self.filename.as_ref().unwrap())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
-            .unwrap();
-
-        let timestamp = timestamp.cloned().unwrap_or_else(|| Utc::now());
-
-        self.process = Some(Process { child, timestamp });
+            .unwrap()
+        );
     }
+}
+
+fn filename_for(timestamp: Option<&DateTime<Utc>>) -> String {
+    let timestamp = timestamp.cloned().unwrap_or_else(|| Utc::now());
+    let formatted = timestamp.to_rfc3339_opts(SecondsFormat::Millis, true).replace(":", "_");
+
+    format!("{}.mp4", formatted)
 }
 
 impl Drop for FfmpegPipe {
     fn drop(&mut self) {
-        let mut process = match self.process.take() { Some(p) => p, _ => return };
-        let result = process.child.wait();
+        let mut child = match self.child.take() { Some(p) => p, _ => return };
+        let result = child.wait();
 
         // Don't panic while panicking if stdin already closed (broken pipe).
         if thread::panicking() { return; }

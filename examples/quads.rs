@@ -100,7 +100,7 @@ fn main() {
         println!("Creating a video of the last run of this example:");
 
         let decompressor = renderer::Decompressor::new("captured_frames", true);
-        let mut ffmpeg_pipe = renderer::FfmpegPipe::new();
+        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(Some("captured_video.mp4"));
 
         decompressor.decompress_from_disk(Arc::new(|stream_frame, _timestamp| {
             renderer::PngEncoder::encode_to_bytes(stream_frame)
@@ -108,6 +108,8 @@ fn main() {
             let png = if let Ok(Ok(png)) = result { png } else { vec![] };
             ffmpeg_pipe.write(&stream_frame, &png, Some(timestamp));
         }));
+
+        println!("Written captured_video.mp4. Running the example again:");
     }
 
     // Alternatively, you could skip compression/decompression and write PNGs directly.

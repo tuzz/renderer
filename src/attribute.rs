@@ -22,7 +22,7 @@ fn wgpu_attribute(shader_location: u32, size: u32) -> wgpu::VertexAttribute {
         2 => wgpu::VertexFormat::Float32x2,
         3 => wgpu::VertexFormat::Float32x3,
         4 => wgpu::VertexFormat::Float32x4,
-        _ => panic!("Unspported attribute size"),
+        _ => panic!("Unsupported attribute size"),
     };
 
     wgpu::VertexAttribute { offset: 0, shader_location, format }
