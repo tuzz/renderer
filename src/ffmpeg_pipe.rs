@@ -68,17 +68,31 @@ impl FfmpegPipe {
             .arg("-stats")
             .arg("-f")
             .arg("image2pipe")
-            .arg("-y")
+
+            // TODO: Make this better. Ideally, we'd store a timestamp_offset on
+            // each stream frame since the start of the capture timestamp.
+            //
+            // We'd then use a Rust crate to do the encoding (e.g. rav1e) and
+            // pass the explicit frame times through (variable frame rate - VRF).
+            //
+            // The timestamp_offset should be as close as possible to when the
+            // frame is displayed on screen (maybe the time the render pass ends?).
+            //
+            // Doing this should make it easier to synchronize video with audio.
             .arg("-framerate")
             .arg("60")
+
+            .arg("-y")
             .arg("-i")
             .arg("-")
+
             .arg("-c:v")
             .arg("libx264")
             .arg("-r")
             .arg("60")
             .arg("-pix_fmt")
             .arg("yuv420p")
+
             .arg(self.filename.as_ref().unwrap())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
