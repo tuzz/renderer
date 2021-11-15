@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::sync::Arc;
 use winit::{event, event_loop, window};
 
 const A_POSITION: usize = 0;
@@ -96,7 +96,7 @@ fn main() {
     }));
 
     // 2) Decompress and process this data later:
-    if Path::new("captured_frames").exists() && renderer::FfmpegPipe::available() {
+    if renderer::Decompressor::can_run("captured_frames") && renderer::FfmpegPipe::available() {
         println!("Creating a video of the last run of this example:");
 
         let decompressor = renderer::Decompressor::new("captured_frames", true);

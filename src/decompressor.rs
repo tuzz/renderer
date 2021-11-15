@@ -23,6 +23,10 @@ impl Decompressor {
         Self { directory: directory.to_string(), remove_files_after_decompression }
     }
 
+    pub fn can_run(directory: &str) -> bool {
+        !scan_directory_for_timestamps(directory).is_empty()
+    }
+
     pub fn decompress_from_disk<T: Send + 'static>(&self, per_thread_function: PerThreadFunction<T>, mut in_order_function: InOrderFunction<T>) {
         let mut ordered_timestamps = scan_directory_for_timestamps(&self.directory);
 
