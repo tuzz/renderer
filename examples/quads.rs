@@ -106,7 +106,7 @@ fn main() {
             renderer::PngEncoder::encode_to_bytes(stream_frame)
         }), Box::new(move |stream_frame, result, timestamp| {
             let png = if let Ok(Ok(png)) = result { png } else { vec![] };
-            ffmpeg_pipe.write(&stream_frame, &png, Some(timestamp));
+            ffmpeg_pipe.write(&stream_frame, png, Some(timestamp));
         }));
 
         println!("Written captured_video.mp4. Running the example again:");

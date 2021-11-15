@@ -7,18 +7,23 @@ pub struct FfmpegPipe {
     pub child: Option<Child>,
     pub timestamp: Option<DateTime<Utc>>,
     pub filename: Option<String>,
+    pub prev_bytes: Option<Vec<u8>>,
 }
 
 impl FfmpegPipe {
     pub fn new(filename: Option<&str>) -> Self {
-        Self { child: None, timestamp: None, filename: filename.map(|s| s.to_string()) }
+        let filename = filename.map(|s| s.to_string());
+
+        Self { child: None, timestamp: None, filename, prev_bytes: None }
     }
 
     pub fn available() -> bool {
         Command::new("ffmpeg").arg("-loglevel").arg("error").spawn().is_ok()
     }
 
-    pub fn write(&mut self, _stream_frame: &crate::StreamFrame, png_bytes: &[u8], timestamp: Option<&DateTime<Utc>>) {
+    pub fn write(&mut self, stream_frame: &crate::StreamFrame, png_bytes: Vec<u8>, timestamp: Option<&DateTime<Utc>>) {
+        if png_bytes.is_empty() && self.prev_bytes.is_none() { return; }
+
         if self.child.is_none() || self.timestamp_has_changed(timestamp) {
             self.re_spawn_process(timestamp);
         }
@@ -26,7 +31,17 @@ impl FfmpegPipe {
         let child = self.child.as_mut().unwrap();
         let stdin = child.stdin.as_mut().unwrap();
 
-        stdin.write_all(png_bytes).unwrap();
+        let duplicate_frame = png_bytes.is_empty();
+
+        if duplicate_frame {
+            eprintln!("Warning: Frame {} is {}. Duplicating previous frame to maintain a steady frame rate.", stream_frame.frame_number, stream_frame.status);
+
+            let duplicate = self.prev_bytes.as_ref().unwrap();
+            stdin.write_all(duplicate).unwrap();
+        } else {
+            stdin.write_all(&png_bytes).unwrap();
+            self.prev_bytes = Some(png_bytes);
+        }
     }
 
     fn timestamp_has_changed(&self, timestamp: Option<&DateTime<Utc>>) -> bool {

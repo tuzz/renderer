@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 
 #[derive(Debug, Default)]
@@ -25,6 +26,16 @@ pub enum FrameStatus {
     Captured, // The frame was captured successfully (image_data=Some)
     Dropped,  // The frame was dropped to save memory (image_data=None)
     Missing,  // The frame was missing from the compressed files (image_data=None)
+}
+
+impl fmt::Display for FrameStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Captured => write!(f, "captured"),
+            Self::Dropped => write!(f, "dropped"),
+            Self::Missing => write!(f, "missing"),
+        }
+    }
 }
 
 #[derive(Debug)]
