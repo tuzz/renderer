@@ -225,6 +225,9 @@ impl Stats {
 
         println!("Compressed size on disk: {:.1} GB", size_on_disk as f32 / 1000. / 1000. / 1000.);
         println!();
+        println!("Compression ratio: {:.1}x", self.raw_video_size as f32 / size_on_disk as f32);
+        println!("Average write speed to disk: {:.1} MB/s", size_on_disk as f32 / elapsed as f32 / 1000. / 1000.);
+        println!();
 
         if let Some(queue_limit) = self.max_frames_queued.as_ref() {
             println!("Compression queue size: {} (limit={})", queue_size, queue_limit);
