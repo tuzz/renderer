@@ -100,7 +100,9 @@ fn main() {
         println!("Creating a video of the last run of this example:");
 
         let decompressor = renderer::Decompressor::new("captured_frames", true);
-        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(Some("captured_video.mp4"));
+        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(Some("captured_video.mp4"), &[
+            "-c:v", "libx264", "-r", "60", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
+        ]);
 
         decompressor.decompress_from_disk(Arc::new(|stream_frame, _timestamp| {
             renderer::PngEncoder::encode_to_bytes(stream_frame)

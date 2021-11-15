@@ -8,13 +8,15 @@ pub struct FfmpegPipe {
     pub timestamp: Option<DateTime<Utc>>,
     pub filename: Option<String>,
     pub prev_bytes: Option<Vec<u8>>,
+    pub ffmpeg_args: Vec<String>,
 }
 
 impl FfmpegPipe {
-    pub fn new(filename: Option<&str>) -> Self {
+    pub fn new(filename: Option<&str>, ffmpeg_args: &[&str]) -> Self {
         let filename = filename.map(|s| s.to_string());
+        let ffmpeg_args = ffmpeg_args.iter().map(|s| s.to_string()).collect();
 
-        Self { child: None, timestamp: None, filename, prev_bytes: None }
+        Self { child: None, timestamp: None, filename, prev_bytes: None, ffmpeg_args }
     }
 
     pub fn available() -> bool {
@@ -61,44 +63,33 @@ impl FfmpegPipe {
             self.filename = Some(filename_for(timestamp));
         }
 
-        self.child = Some(Command::new("ffmpeg")
-            .arg("-hide_banner")
-            .arg("-loglevel")
-            .arg("error")
-            .arg("-stats")
-            .arg("-f")
-            .arg("image2pipe")
+        let mut command = Command::new("ffmpeg");
 
-            // TODO: Make this better. Ideally, we'd store a timestamp_offset on
-            // each stream frame since the start of the capture timestamp.
-            //
-            // We'd then use a Rust crate to do the encoding (e.g. rav1e) and
-            // pass the explicit frame times through (variable frame rate - VRF).
-            //
-            // The timestamp_offset should be as close as possible to when the
-            // frame is displayed on screen (maybe the time the render pass ends?).
-            //
-            // Doing this should make it easier to synchronize video with audio.
-            .arg("-framerate")
-            .arg("60")
+        command.arg("-hide_banner").arg("-loglevel").arg("error").arg("-stats");
+        command.arg("-f").arg("image2pipe");
 
-            .arg("-y")
-            .arg("-i")
-            .arg("-")
+        // TODO: Make this better. Ideally, we'd store a timestamp_offset on
+        // each stream frame since the start of the capture timestamp.
+        //
+        // We'd then use a Rust crate to do the encoding (e.g. rav1e) and
+        // pass the explicit frame times through (variable frame rate - VRF).
+        //
+        // The timestamp_offset should be as close as possible to when the
+        // frame is displayed on screen (maybe the time the render pass ends?).
+        //
+        // Doing this should make it easier to synchronize video with audio.
+        command.arg("-framerate").arg("60");
 
-            .arg("-c:v")
-            .arg("libx264")
-            .arg("-r")
-            .arg("60")
-            .arg("-pix_fmt")
-            .arg("yuv420p")
+        command.arg("-y").arg("-i").arg("-");
 
-            .arg(self.filename.as_ref().unwrap())
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap()
-        );
+        for arg in &self.ffmpeg_args {
+            command.arg(arg);
+        }
+
+        command.arg(self.filename.as_ref().unwrap());
+        command.stdin(Stdio::piped()).stdout(Stdio::piped());
+
+        self.child = Some(command.spawn().unwrap());
     }
 }
 
