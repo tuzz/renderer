@@ -60,8 +60,8 @@ impl Texture {
         (binding, layout)
     }
 
-    pub fn image_copy_texture(&self) -> wgpu::ImageCopyTexture {
-        image_copy_texture(&self.texture, (0, 0))
+    pub fn image_copy_texture(&self, (x, y): (u32, u32)) -> wgpu::ImageCopyTexture {
+        image_copy_texture(&self.texture, (x, y))
     }
 
     pub fn image_data_layout(&self, bytes_per_row: u32) -> wgpu::ImageDataLayout {

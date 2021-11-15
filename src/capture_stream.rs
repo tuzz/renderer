@@ -66,11 +66,11 @@ impl CaptureStream {
         self.inner.borrow_mut().cleared_this_frame = false;
     }
 
-    pub fn create_buffer_if_within_memory_limit(&self, device: &wgpu::Device) {
+    pub fn create_buffer_if_within_memory_limit(&self, device: &wgpu::Device, viewport: Option<&crate::Viewport>) {
         let mut inner = self.inner.borrow_mut();
 
-        let width = inner.texture.size.0 as usize;
-        let height = inner.texture.size.1 as usize;
+        let width = viewport.map(|v| v.width.floor() as usize).unwrap_or(inner.texture.size.0 as usize);
+        let height = viewport.map(|v| v.height.floor() as usize).unwrap_or(inner.texture.size.1 as usize);
         let format = inner.texture.format;
 
         let unpadded_bytes_per_row = width * format.bytes_per_texel() as usize;
@@ -107,20 +107,27 @@ impl CaptureStream {
         });
     }
 
-    pub fn copy_texture_to_buffer_if_present(&self, encoder: &mut wgpu::CommandEncoder) {
+    pub fn copy_texture_to_buffer_if_present(&self, encoder: &mut wgpu::CommandEncoder, viewport: Option<&crate::Viewport>) {
         let inner = self.inner.borrow_mut();
 
         let stream_frame = inner.stream_frames.back().unwrap();
         let image_data = match &stream_frame.image_data { Some(d) => d, _ => return };
 
-        let image_copy = inner.texture.image_copy_texture();
+        let margin_x = viewport.map(|v| v.margin_x.ceil() as u32).unwrap_or(0);
+        let margin_y = viewport.map(|v| v.margin_y.ceil() as u32).unwrap_or(0);
+
+        let image_copy = inner.texture.image_copy_texture((margin_x, margin_y));
 
         let buffer_copy = wgpu::ImageCopyBuffer {
             buffer: image_data.buffer(),
             layout: inner.texture.image_data_layout(stream_frame.padded_bytes_per_row as u32),
         };
 
-        encoder.copy_texture_to_buffer(image_copy, buffer_copy, inner.texture.extent());
+        let mut extent = inner.texture.extent();
+        extent.width -= 2 * margin_x;
+        extent.height -= 2 * margin_y;
+
+        encoder.copy_texture_to_buffer(image_copy, buffer_copy, extent);
     }
 
     pub fn initiate_buffer_mapping(&mut self) {
