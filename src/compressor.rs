@@ -1,4 +1,5 @@
-use std::{mem, fs, thread, time, io::{Write, BufWriter}, cell::RefCell, sync::atomic::Ordering};
+use std::{mem, thread, time, io::{Write, BufWriter}, cell::RefCell, sync::atomic::Ordering};
+use std::{path::Path, fs};
 use chrono::{DateTime, SecondsFormat, Utc};
 use crossbeam_channel::{Sender, Receiver};
 use lzzzz::lz4f;
@@ -90,7 +91,10 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
     let compress_config = compression_config(lz4_compression_level);
     let encode_config = encoding_config();
 
-    let file = fs::File::create(format!("{}/{}--{}.sz", directory, timestamp, i)).unwrap();
+    let filename = format!("{}--{}.sz", timestamp, i);
+    let path = Path::new(directory).join(filename).into_os_string().into_string().unwrap();
+
+    let file = fs::File::create(path).unwrap();
     let mut writer = lz4f::WriteCompressor::new(BufWriter::new(file), compress_config).unwrap();
 
     thread::spawn(move || {

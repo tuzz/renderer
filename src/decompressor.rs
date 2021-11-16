@@ -1,4 +1,4 @@
-use std::{mem, fs, thread, cmp, ops, io::{Read, BufReader}};
+use std::{mem, fs, path::Path, thread, cmp, ops, io::{Read, BufReader}};
 use std::collections::{BinaryHeap, BTreeMap};
 use std::sync::{Arc, atomic::AtomicUsize};
 use chrono::{DateTime, Utc};
@@ -44,11 +44,15 @@ impl Decompressor {
         if self.remove_files_after_decompression {
             for (_timestamp, filenames) in ordered_timestamps {
                 for filename in filenames {
-                    let _ = fs::remove_file(format!("{}/{}", self.directory, filename));
+                    let _ = fs::remove_file(path(&self.directory, &filename));
                 }
             }
         }
     }
+}
+
+fn path(directory: &str, filename: &str) -> String {
+    Path::new(directory).join(filename).into_os_string().into_string().unwrap()
 }
 
 fn scan_directory_for_timestamps(directory: &str) -> BTreeMap<DateTime<Utc>, Vec<String>> {
@@ -190,7 +194,7 @@ fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_f
     let timestamp = timestamp.clone();
     let decode_config = decoding_config();
 
-    let file = fs::File::open(format!("{}/{}", directory, filename)).unwrap();
+    let file = fs::File::open(path(directory, filename)).unwrap();
     let mut reader = BufReadDecompressor::new(BufReader::new(file)).unwrap();
 
     let mut packet_len_bytes = [0; U64_LEN];
