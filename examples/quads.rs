@@ -99,8 +99,8 @@ fn main() {
     if renderer::Decompressor::can_run("captured_frames") && renderer::FfmpegPipe::available() {
         println!("Creating a video of the last run of this example:");
 
-        let decompressor = renderer::Decompressor::new("captured_frames", true);
-        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(Some("captured_video.mp4"), &[
+        let decompressor = renderer::Decompressor::new("captured_frames", false);
+        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(None, Some("captured_video.mp4"), &[
             "-c:v", "libx264", "-r", "60", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         ]);
 

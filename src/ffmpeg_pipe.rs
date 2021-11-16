@@ -1,22 +1,24 @@
 use std::process::{Command, Child, Stdio};
-use std::io::Write;
+use std::{io::Write, path::Path};
 use std::thread;
 use chrono::{DateTime, Utc, SecondsFormat};
 
 pub struct FfmpegPipe {
     pub child: Option<Child>,
     pub timestamp: Option<DateTime<Utc>>,
+    pub base_directory: Option<String>,
     pub filename: Option<String>,
     pub prev_bytes: Option<Vec<u8>>,
     pub ffmpeg_args: Vec<String>,
 }
 
 impl FfmpegPipe {
-    pub fn new(filename: Option<&str>, ffmpeg_args: &[&str]) -> Self {
+    pub fn new(base_directory: Option<&str>, filename: Option<&str>, ffmpeg_args: &[&str]) -> Self {
+        let base_directory = base_directory.map(|s| s.to_string());
         let filename = filename.map(|s| s.to_string());
         let ffmpeg_args = ffmpeg_args.iter().map(|s| s.to_string()).collect();
 
-        Self { child: None, timestamp: None, filename, prev_bytes: None, ffmpeg_args }
+        Self { child: None, timestamp: None, base_directory, filename, prev_bytes: None, ffmpeg_args }
     }
 
     pub fn available() -> bool {
@@ -59,10 +61,6 @@ impl FfmpegPipe {
     fn re_spawn_process(&mut self, timestamp: Option<&DateTime<Utc>>) {
         self.timestamp = timestamp.cloned();
 
-        if self.filename.is_none() {
-            self.filename = Some(filename_for(timestamp));
-        }
-
         let mut command = Command::new("ffmpeg");
 
         command.arg("-hide_banner").arg("-loglevel").arg("error").arg("-stats");
@@ -86,18 +84,24 @@ impl FfmpegPipe {
             command.arg(arg);
         }
 
-        command.arg(self.filename.as_ref().unwrap());
+        command.arg(&self.output_filename());
         command.stdin(Stdio::piped()).stdout(Stdio::piped());
 
         self.child = Some(command.spawn().unwrap());
     }
-}
 
-fn filename_for(timestamp: Option<&DateTime<Utc>>) -> String {
-    let timestamp = timestamp.cloned().unwrap_or_else(|| Utc::now());
-    let formatted = timestamp.to_rfc3339_opts(SecondsFormat::Millis, true).replace(":", "_");
+    fn output_filename(&self) -> String {
+        let directory = self.base_directory.clone().unwrap_or_else(|| ".".to_string());
 
-    format!("{}.mp4", formatted)
+        let filename = self.filename.clone().unwrap_or_else(|| {
+            let timestamp = self.timestamp.clone().unwrap_or_else(|| Utc::now());
+            let formatted = timestamp.to_rfc3339_opts(SecondsFormat::Millis, true).replace(":", "_");
+
+            format!("{}.mp4", formatted)
+        });
+
+        Path::new(&directory).join(&filename).into_os_string().into_string().unwrap()
+    }
 }
 
 impl Drop for FfmpegPipe {
