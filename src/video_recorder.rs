@@ -4,19 +4,19 @@ use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 use futures::FutureExt;
 use noop_waker::noop_waker;
 
-pub struct CaptureStream {
+pub struct VideoRecorder {
     pub max_buffer_size_in_bytes: usize,
-    pub process_function: Box<dyn FnMut(crate::StreamFrame)>,
+    pub process_function: Box<dyn FnMut(crate::VideoFrame)>,
     pub inner: rc::Rc<cell::RefCell<Inner>>,
 }
 
 pub struct Inner {
-    pub texture: crate::Texture,
+    pub recording_texture: crate::Texture,
     pub clear_color: Option<crate::ClearColor>,
     pub cleared_this_frame: bool,
 
     pub buffer_size_in_bytes: Arc<AtomicUsize>,
-    pub stream_frames: VecDeque<crate::StreamFrame>,
+    pub video_frames: VecDeque<crate::VideoFrame>,
     pub map_futures: VecDeque<Option<MapFuture>>,
 
     pub frame_number: usize,
@@ -24,17 +24,17 @@ pub struct Inner {
 
 pub struct MapFuture(pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>);
 
-impl CaptureStream {
-    pub fn new(renderer: &crate::Renderer, clear_color: Option<crate::ClearColor>, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(crate::StreamFrame)>) -> Self {
+impl VideoRecorder {
+    pub fn new(renderer: &crate::Renderer, clear_color: Option<crate::ClearColor>, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(crate::VideoFrame)>) -> Self {
         let size = (renderer.window_size.width, renderer.window_size.height);
 
         let inner = Inner {
-            texture: create_stream_texture(&renderer.device, size),
+            recording_texture: create_recording_texture(&renderer.device, size),
             cleared_this_frame: false,
             clear_color,
 
             buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
-            stream_frames: VecDeque::new(),
+            video_frames: VecDeque::new(),
             map_futures: VecDeque::new(),
 
             frame_number: 0,
@@ -59,7 +59,7 @@ impl CaptureStream {
         drop(inner);
         let inner = unsafe { self.inner.try_borrow_unguarded().unwrap() };
 
-        wgpu::RenderPassColorAttachment { view: &inner.texture.view, resolve_target: None, ops }
+        wgpu::RenderPassColorAttachment { view: &inner.recording_texture.view, resolve_target: None, ops }
     }
 
     pub fn finish_frame(&self) {
@@ -69,9 +69,9 @@ impl CaptureStream {
     pub fn create_buffer_if_within_memory_limit(&self, device: &wgpu::Device, viewport: Option<&crate::Viewport>) {
         let mut inner = self.inner.borrow_mut();
 
-        let width = viewport.map(|v| v.width.floor() as usize).unwrap_or(inner.texture.size.0 as usize);
-        let height = viewport.map(|v| v.height.floor() as usize).unwrap_or(inner.texture.size.1 as usize);
-        let format = inner.texture.format;
+        let width = viewport.map(|v| v.width.floor() as usize).unwrap_or(inner.recording_texture.size.0 as usize);
+        let height = viewport.map(|v| v.height.floor() as usize).unwrap_or(inner.recording_texture.size.1 as usize);
+        let format = inner.recording_texture.format;
 
         let unpadded_bytes_per_row = width * format.bytes_per_texel() as usize;
 
@@ -102,7 +102,7 @@ impl CaptureStream {
         let frame_number = inner.frame_number;
         let buffer_size_in_bytes = Arc::clone(&inner.buffer_size_in_bytes);
 
-        inner.stream_frames.push_back(crate::StreamFrame {
+        inner.video_frames.push_back(crate::VideoFrame {
             status, image_data, format, width, height, unpadded_bytes_per_row, padded_bytes_per_row, frame_number, frame_size_in_bytes, buffer_size_in_bytes
         });
     }
@@ -110,20 +110,20 @@ impl CaptureStream {
     pub fn copy_texture_to_buffer_if_present(&self, encoder: &mut wgpu::CommandEncoder, viewport: Option<&crate::Viewport>) {
         let inner = self.inner.borrow_mut();
 
-        let stream_frame = inner.stream_frames.back().unwrap();
-        let image_data = match &stream_frame.image_data { Some(d) => d, _ => return };
+        let video_frame = inner.video_frames.back().unwrap();
+        let image_data = match &video_frame.image_data { Some(d) => d, _ => return };
 
         let margin_x = viewport.map(|v| v.margin_x.ceil() as u32).unwrap_or(0);
         let margin_y = viewport.map(|v| v.margin_y.ceil() as u32).unwrap_or(0);
 
-        let image_copy = inner.texture.image_copy_texture((margin_x, margin_y));
+        let image_copy = inner.recording_texture.image_copy_texture((margin_x, margin_y));
 
         let buffer_copy = wgpu::ImageCopyBuffer {
             buffer: image_data.buffer(),
-            layout: inner.texture.image_data_layout(stream_frame.padded_bytes_per_row as u32),
+            layout: inner.recording_texture.image_data_layout(video_frame.padded_bytes_per_row as u32),
         };
 
-        let mut extent = inner.texture.extent();
+        let mut extent = inner.recording_texture.extent();
         extent.width -= 2 * margin_x;
         extent.height -= 2 * margin_y;
 
@@ -133,11 +133,11 @@ impl CaptureStream {
     pub fn initiate_buffer_mapping(&mut self) {
         let mut inner = self.inner.borrow_mut();
 
-        for i in 0..inner.stream_frames.len() {
+        for i in 0..inner.video_frames.len() {
             if inner.map_futures.get(i).is_some() { continue; }
-            let stream_frame = &inner.stream_frames[i];
+            let video_frame = &inner.video_frames[i];
 
-            if let Some(image_data) = &stream_frame.image_data {
+            if let Some(image_data) = &video_frame.image_data {
                 let future = image_data.buffer().slice(..).map_async(wgpu::MapMode::Read);
                 inner.map_futures.push_back(Some(MapFuture(future.boxed())));
             } else {
@@ -150,16 +150,16 @@ impl CaptureStream {
         let mut inner = self.inner.borrow_mut();
 
         loop {
-            if inner.stream_frames.is_empty() { break; }
+            if inner.video_frames.is_empty() { break; }
             let option = &mut inner.map_futures[0];
 
             // If the frame was dropped, immediately call the process function.
             // Let it decide what to do with the dropped frame.
             if option.is_none() {
-                let stream_frame = inner.stream_frames.pop_front().unwrap();
+                let video_frame = inner.video_frames.pop_front().unwrap();
                 inner.map_futures.pop_front().unwrap();
 
-                (self.process_function)(stream_frame);
+                (self.process_function)(video_frame);
                 continue;
             }
 
@@ -172,17 +172,17 @@ impl CaptureStream {
                 Poll::Ready(result) => {
                     result.unwrap(); // Panic if mapping failed.
 
-                    let stream_frame = inner.stream_frames.pop_front().unwrap();
+                    let video_frame = inner.video_frames.pop_front().unwrap();
                     inner.map_futures.pop_front().unwrap();
 
-                    (self.process_function)(stream_frame);
+                    (self.process_function)(video_frame);
                 },
             }
         }
     }
 }
 
-fn create_stream_texture(device: &wgpu::Device, size: (u32, u32)) -> crate::Texture {
+fn create_recording_texture(device: &wgpu::Device, size: (u32, u32)) -> crate::Texture {
     let filter_mode = crate::FilterMode::Nearest; // Not used
     let format = crate::Format::RgbaU8;
     let msaa_samples = 1;

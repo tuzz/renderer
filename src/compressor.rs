@@ -7,7 +7,7 @@ use lzzzz::lz4f;
 pub struct Compressor {
     pub timestamp: String,
     pub threads: Vec<thread::JoinHandle<()>>,
-    pub sender: Option<Sender<crate::StreamFrame>>,
+    pub sender: Option<Sender<crate::VideoFrame>>,
     pub stats: Option<RefCell<Stats>>,
 }
 
@@ -33,14 +33,14 @@ impl Compressor {
         Compressor { timestamp, threads, sender: Some(sender), stats }
     }
 
-    pub fn compress_to_disk(&self, stream_frame: crate::StreamFrame) {
+    pub fn compress_to_disk(&self, video_frame: crate::VideoFrame) {
         let sender = self.sender.as_ref().unwrap();
 
         if let Some(stats) = self.stats.as_ref() {
-            stats.borrow_mut().update(&stream_frame, &self.timestamp, self.threads.len(), sender.len());
+            stats.borrow_mut().update(&video_frame, &self.timestamp, self.threads.len(), sender.len());
         }
 
-        sender.send(stream_frame).unwrap();
+        sender.send(video_frame).unwrap();
     }
 
     pub fn finish(&mut self) {
@@ -77,15 +77,15 @@ fn generate_timestamp() -> String {
 //
 // Otherwise, create an unbounded queue that won't block the main thread but
 // will cause frames to be dropped if max_buffer_size_in_bytes is exceeded.
-fn create_channel(max_frames_queued: Option<usize>) -> (Sender<crate::StreamFrame>, Receiver<crate::StreamFrame>){
+fn create_channel(max_frames_queued: Option<usize>) -> (Sender<crate::VideoFrame>, Receiver<crate::VideoFrame>){
     if let Some(channel_capacity) = max_frames_queued {
-        crossbeam_channel::bounded::<crate::StreamFrame>(channel_capacity)
+        crossbeam_channel::bounded::<crate::VideoFrame>(channel_capacity)
     } else {
-        crossbeam_channel::unbounded::<crate::StreamFrame>()
+        crossbeam_channel::unbounded::<crate::VideoFrame>()
     }
 }
 
-fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timestamp: &str, i: usize, lz4_compression_level: u8) -> thread::JoinHandle<()> {
+fn spawn_thread(receiver: &Receiver<crate::VideoFrame>, directory: &str, timestamp: &str, i: usize, lz4_compression_level: u8) -> thread::JoinHandle<()> {
     let receiver = receiver.clone();
 
     let compress_config = compression_config(lz4_compression_level);
@@ -98,23 +98,23 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
     let mut writer = lz4f::WriteCompressor::new(BufWriter::new(file), compress_config).unwrap();
 
     thread::spawn(move || {
-        // When a stream_frame is received from the channel, write it to the
+        // When a video_frame is received from the channel, write it to the
         // compressor in packets of bytes that have this layout:
         //
-        // [ packet_len | stream_frame_len | stream_frame | image_data ]
+        // [ packet_len | video_frame_len | video_frame | image_data ]
         //     (u64)           (u64)          (bincode)        (raw)
 
         loop {
             let mut packet_len: u64 = (U64_LEN + U64_LEN) as u64;
 
-            let stream_frame = match receiver.recv() { Ok(f) => f, _ => break };
-            let stream_frame_bytes = bincode::encode_to_vec(&stream_frame, encode_config).unwrap();
-            let stream_frame_len = stream_frame_bytes.len() as u64;
-            packet_len += stream_frame_len;
+            let video_frame = match receiver.recv() { Ok(f) => f, _ => break };
+            let video_frame_bytes = bincode::encode_to_vec(&video_frame, encode_config).unwrap();
+            let video_frame_len = video_frame_bytes.len() as u64;
+            packet_len += video_frame_len;
 
             let mut write_image_data_bytes = None;
 
-            if let Some(image_data) = &stream_frame.image_data {
+            if let Some(image_data) = &video_frame.image_data {
                 let image_data_bytes = image_data.buffer().slice(..).get_mapped_range();
                 packet_len += image_data_bytes.len() as u64;
 
@@ -124,8 +124,8 @@ fn spawn_thread(receiver: &Receiver<crate::StreamFrame>, directory: &str, timest
             }
 
             writer.write_all(&packet_len.to_be_bytes()).unwrap();
-            writer.write_all(&stream_frame_len.to_be_bytes()).unwrap();
-            writer.write_all(&stream_frame_bytes).unwrap();
+            writer.write_all(&video_frame_len.to_be_bytes()).unwrap();
+            writer.write_all(&video_frame_bytes).unwrap();
             write_image_data_bytes.map(|closure| closure(&mut writer));
         }
     })
@@ -171,21 +171,21 @@ impl Stats {
         }
     }
 
-    fn update(&mut self, stream_frame: &crate::StreamFrame, filename_timestamp: &str, num_threads: usize, queue_size: usize) {
-        match &stream_frame.status {
+    fn update(&mut self, video_frame: &crate::VideoFrame, filename_timestamp: &str, num_threads: usize, queue_size: usize) {
+        match &video_frame.status {
             crate::FrameStatus::Captured => {
                 self.frames_captured += 1;
-                self.raw_video_size += stream_frame.frame_size_in_bytes;
+                self.raw_video_size += video_frame.frame_size_in_bytes;
 
                 if self.frames_captured > 1 {
-                    self.has_resized |= stream_frame.width != self.prev_width;
-                    self.has_resized |= stream_frame.height != self.prev_height;
+                    self.has_resized |= video_frame.width != self.prev_width;
+                    self.has_resized |= video_frame.height != self.prev_height;
                 } else {
                     self.started_at = Some(Utc::now());
                 }
 
-                self.prev_width = stream_frame.width;
-                self.prev_height = stream_frame.height;
+                self.prev_width = video_frame.width;
+                self.prev_height = video_frame.height;
             },
             crate::FrameStatus::Dropped => {
                 self.frames_dropped += 1;
@@ -193,7 +193,7 @@ impl Stats {
             _ => unreachable!(),
         }
 
-        if stream_frame.frame_number % 60 != 0 { return; }
+        if video_frame.frame_number % 60 != 0 { return; }
 
         let started_at = *self.started_at.as_ref().unwrap();
         let elapsed = (Utc::now() - started_at).to_std().unwrap().as_secs();
@@ -209,10 +209,10 @@ impl Stats {
         println!("Frames captured: {}", self.frames_captured);
         println!("Frames dropped: {}", self.frames_dropped);
         println!();
-        println!("Average frame rate: {:.1} Hz", stream_frame.frame_number as f32 / elapsed as f32);
+        println!("Average frame rate: {:.1} Hz", video_frame.frame_number as f32 / elapsed as f32);
         println!("Average frame size: {:.2} MB", self.raw_video_size as f32 / self.frames_captured as f32 / 1000. / 1000.);
         println!();
-        println!("Current resolution: {}x{}", stream_frame.width, stream_frame.height);
+        println!("Current resolution: {}x{}", video_frame.width, video_frame.height);
         println!("Viewport has resized: {}", if self.has_resized { "Yes" } else { "No" });
         println!();
         println!("Raw video size: {:.1} GB", self.raw_video_size as f32 / 1000. / 1000. / 1000.);
@@ -242,6 +242,6 @@ impl Stats {
         println!("Compression worker threads: {}", num_threads);
         println!();
         println!("LZ4 compression level: {}", self.lz4_compression_level);
-        println!("GPU memory buffer size: {:.1} MB", stream_frame.buffer_size_in_bytes.load(Ordering::Relaxed) as f32 / 1000. / 1000.);
+        println!("GPU memory buffer size: {:.1} MB", video_frame.buffer_size_in_bytes.load(Ordering::Relaxed) as f32 / 1000. / 1000.);
     }
 }

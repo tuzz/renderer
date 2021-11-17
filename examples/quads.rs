@@ -86,32 +86,32 @@ fn main() {
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
     renderer.set_texture(&pipeline, T_TEXTURE, &image);
 
-    // The renderer can also capture raw frames by adding f_capture_stream to your shaders.
+    // The renderer can also record raw frames by adding f_recording to your shaders.
     // This is very CPU and data intensive (2GB/s at 4K60) so it's recommended to:
     //
     // 1) Compress the raw frame data to disk:
-    let compressor = renderer::Compressor::new("captured_frames", None, 0, true);
-    renderer.set_capture_stream(&[&pipeline], Some(clear_color), 500., Box::new(move |stream_frame| {
-        compressor.compress_to_disk(stream_frame);
+    let compressor = renderer::Compressor::new("recorded_frames", None, 0, true);
+    renderer.start_recording(&[&pipeline], Some(clear_color), 500., Box::new(move |video_frame| {
+        compressor.compress_to_disk(video_frame);
     }));
 
     // 2) Decompress and process this data later:
-    if renderer::Decompressor::can_run("captured_frames") && renderer::FfmpegPipe::available() {
+    if renderer::Decompressor::can_run("recorded_frames") && renderer::FfmpegPipe::available() {
         println!("Creating a video of the last run of this example:");
 
-        let decompressor = renderer::Decompressor::new("captured_frames", false);
-        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(None, Some("captured_video.mp4"), &[
+        let decompressor = renderer::Decompressor::new("recorded_frames", false);
+        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(None, Some("recorded_video.mp4"), &[
             "-c:v", "libx264", "-r", "60", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         ]);
 
-        decompressor.decompress_from_disk(Arc::new(|stream_frame, _timestamp| {
-            renderer::PngEncoder::encode_to_bytes(stream_frame)
-        }), Box::new(move |stream_frame, result, timestamp| {
+        decompressor.decompress_from_disk(Arc::new(|video_frame, _timestamp| {
+            renderer::PngEncoder::encode_to_bytes(video_frame)
+        }), Box::new(move |video_frame, result, timestamp| {
             let png = if let Ok(Ok(png)) = result { png } else { vec![] };
-            ffmpeg_pipe.write(&stream_frame, png, Some(timestamp));
+            ffmpeg_pipe.write(&video_frame, png, Some(timestamp));
         }));
 
-        println!("Written captured_video.mp4. Running the example again:");
+        println!("Written recorded_video.mp4. Running the example again:");
     }
 
     // Alternatively, you could skip compression/decompression and write PNGs directly.

@@ -12,11 +12,11 @@ pub struct Decompressor {
 
 struct Worker<T> {
     pub thread: thread::JoinHandle<()>,
-    pub receiver: Receiver<(crate::StreamFrame, T)>,
+    pub receiver: Receiver<(crate::VideoFrame, T)>,
 }
 
-pub type PerThreadFunction<T> = Arc<dyn Fn(&crate::StreamFrame, DateTime<Utc>) -> T + Send + Sync>;
-pub type InOrderFunction<T> = Box<dyn FnMut(crate::StreamFrame, Result<T, &'static str>, &DateTime<Utc>)>;
+pub type PerThreadFunction<T> = Arc<dyn Fn(&crate::VideoFrame, DateTime<Utc>) -> T + Send + Sync>;
+pub type InOrderFunction<T> = Box<dyn FnMut(crate::VideoFrame, Result<T, &'static str>, &DateTime<Utc>)>;
 
 impl Decompressor {
     pub fn new(directory: &str, remove_files_after_decompression: bool) -> Self {
@@ -102,7 +102,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
         // have image data then ask again until one that does have image data is received.
         //
         // We need to do this to avoid decompression filling up memory when there's a run
-        // of dropped frames in the capture stream. What tends to happen is one of the
+        // of dropped frames when recording video. What tends to happen is one of the
         // compression threads picks up almost all of the dropped frames and writes it to
         // its compressed file while the others are busy. If we always received frames in
         // round robin from the decompression threads then we'd fill up memory from the
@@ -112,10 +112,10 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
         // that we mimic the thread balancing pattern from the compression side.
         let drained = workers.drain_filter(|worker| {
             loop {
-                if let Ok((stream_frame, t)) = worker.receiver.recv() {
-                    let has_image_data = stream_frame.image_data.is_some();
+                if let Ok((video_frame, t)) = worker.receiver.recv() {
+                    let has_image_data = video_frame.image_data.is_some();
 
-                    min_heap.push(cmp::Reverse(OrderableFrame((stream_frame, t))));
+                    min_heap.push(cmp::Reverse(OrderableFrame((video_frame, t))));
 
                     if has_image_data { return false; }
                 } else {
@@ -139,8 +139,8 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
             };
 
             if min_frame.0.frame_number == expected_frame {
-                let (stream_frame, t) = min_frame.0.0;
-                in_order_function(stream_frame, Ok(t), timestamp);
+                let (video_frame, t) = min_frame.0.0;
+                in_order_function(video_frame, Ok(t), timestamp);
 
                 expected_frame += 1;
                 advanced_by_at_least_one_frame = true;
@@ -155,17 +155,17 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
         // If we didn't advance by at least one frame in each iteration of the loop then
         // we must be missing some compressed data, e.g. maybe a .sz file was deleted.
         //
-        // This isn't the same as a frame being dropped during capture as those still
-        // appear in the compressed data as StreamFrames with status=Dropped.
+        // This isn't the same as a frame being dropped during recording as those still
+        // appear in the compressed data as VideoFrames with status=Dropped.
         //
-        // If we are missing data then yield StreamFrames with a status of Missing so
+        // If we are missing data then yield VideoFrames with a status of Missing so
         // that the calling code can decide what to do.
 
         let next_available_frame = min_heap.peek().unwrap().0.frame_number;
 
         loop {
             in_order_function(
-                crate::StreamFrame {
+                crate::VideoFrame {
                     status: crate::FrameStatus::Missing,
                     image_data: None,
                     frame_number: expected_frame,
@@ -198,48 +198,48 @@ fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_f
     let mut reader = BufReadDecompressor::new(BufReader::new(file)).unwrap();
 
     let mut packet_len_bytes = [0; U64_LEN];
-    let mut stream_frame_len_bytes = [0; U64_LEN];
-    let mut stream_frame_bytes = vec![];
+    let mut video_frame_len_bytes = [0; U64_LEN];
+    let mut video_frame_bytes = vec![];
 
     let thread = thread::spawn(move || {
         // Read decompressed bytes from the file. Decode each packet to a
-        // StreamFrame and send it to the channel. The packets have this layout:
+        // VideoFrame and send it to the channel. The packets have this layout:
         //
-        // [ packet_len | stream_frame_len | stream_frame | image_data ]
+        // [ packet_len | video_frame_len | video_frame | image_data ]
         //     (u64)           (u64)          (bincode)        (raw)
         //
         // If the reader ends cleanly at the end of a packet then return.
-        // Otherwise, send a StreamFrame to the channel with FrameStatus::Corrupt.
+        // Otherwise, send a VideoFrame to the channel with FrameStatus::Corrupt.
 
         loop {
             // Read and decode packet_len.
             match reader.read_exact(&mut packet_len_bytes) { Ok(_) => {}, _ => return }
             let packet_len = u64::from_be_bytes(packet_len_bytes) as usize;
 
-            // Read and decode stream_frame_len.
-            match reader.read_exact(&mut stream_frame_len_bytes) { Ok(_) => {}, _ => break }
-            let stream_frame_len = u64::from_be_bytes(stream_frame_len_bytes) as usize;
+            // Read and decode video_frame_len.
+            match reader.read_exact(&mut video_frame_len_bytes) { Ok(_) => {}, _ => break }
+            let video_frame_len = u64::from_be_bytes(video_frame_len_bytes) as usize;
 
-            // Read stream_frame.
-            stream_frame_bytes.resize(stream_frame_len, 0);
-            match reader.read_exact(&mut stream_frame_bytes) { Ok(_) => {}, _ => break }
+            // Read video_frame.
+            video_frame_bytes.resize(video_frame_len, 0);
+            match reader.read_exact(&mut video_frame_bytes) { Ok(_) => {}, _ => break }
 
-            // Decode stream_frame.
-            let result = bincode::decode_from_slice(&stream_frame_bytes, decode_config);
-            let mut stream_frame: crate::StreamFrame = match result { Ok(f) => f, _ => break }; // TODO: advance to next packet instead of breaking
+            // Decode video_frame.
+            let result = bincode::decode_from_slice(&video_frame_bytes, decode_config);
+            let mut video_frame: crate::VideoFrame = match result { Ok(f) => f, _ => break }; // TODO: advance to next packet instead of breaking
 
-            if stream_frame.image_data.is_some() {
+            if video_frame.image_data.is_some() {
                 // Read image_data.
-                let remainder_len = packet_len - U64_LEN - U64_LEN - stream_frame_len;
+                let remainder_len = packet_len - U64_LEN - U64_LEN - video_frame_len;
                 let mut image_data_bytes = vec![0; remainder_len];
                 match reader.read_exact(&mut image_data_bytes) { Ok(_) => {}, _ => break } // TODO: advance to next packet instead of breaking
 
                 // Decode image_data.
-                stream_frame.image_data = Some(crate::ImageData::Bytes(image_data_bytes));
+                video_frame.image_data = Some(crate::ImageData::Bytes(image_data_bytes));
             }
 
-            let t = per_thread_function(&stream_frame, timestamp);
-            sender.send((stream_frame, t)).unwrap();
+            let t = per_thread_function(&video_frame, timestamp);
+            sender.send((video_frame, t)).unwrap();
         }
 
         // TODO: corrupt frame
@@ -254,10 +254,10 @@ fn decoding_config() -> bincode::config::Configuration {
     bincode::config::Configuration::standard()
 }
 
-struct OrderableFrame<T>((crate::StreamFrame, T));
+struct OrderableFrame<T>((crate::VideoFrame, T));
 
 impl<T> ops::Deref for OrderableFrame<T> {
-    type Target = crate::StreamFrame;
+    type Target = crate::VideoFrame;
 
     fn deref(&self) -> &Self::Target {
         &self.0.0

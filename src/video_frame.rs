@@ -3,7 +3,7 @@ use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 
 #[derive(Debug, Default)]
 #[cfg_attr(feature="bincode", derive(bincode::Encode, bincode::Decode))]
-pub struct StreamFrame {
+pub struct VideoFrame {
     pub status: FrameStatus,
     pub image_data: Option<ImageData>,
 
@@ -67,7 +67,7 @@ impl ImageData {
     }
 }
 
-impl Drop for StreamFrame {
+impl Drop for VideoFrame {
     fn drop(&mut self) {
         // We still set frame_size_in_bytes for dropped frames.
         if self.image_data.is_some() {

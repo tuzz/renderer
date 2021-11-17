@@ -18,7 +18,7 @@ pub struct InnerR {
     pub frame: Option<wgpu::SurfaceTexture>,
     pub frame_view: Option<wgpu::TextureView>,
     pub commands: Vec<wgpu::CommandBuffer>,
-    pub stream: Option<crate::CaptureStream>,
+    pub recorder: Option<crate::VideoRecorder>,
 }
 
 impl Renderer {
@@ -35,8 +35,8 @@ impl Renderer {
         let frame = Some(surface.get_current_texture().unwrap());
         let frame_view = Some(frame.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default()));
         let commands = vec![];
-        let stream = None;
-        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, frame, frame_view, commands, stream };
+        let recorder = None;
+        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, frame, frame_view, commands, recorder };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -101,10 +101,10 @@ impl Renderer {
         inner.frame.take().unwrap().present();
         inner.frame_view = None;
 
-        if let Some(stream) = &mut inner.stream {
-            stream.initiate_buffer_mapping();
-            stream.process_mapped_buffers();
-            stream.finish_frame();
+        if let Some(recorder) = &mut inner.recorder {
+            recorder.initiate_buffer_mapping();
+            recorder.process_mapped_buffers();
+            recorder.finish_frame();
         }
     }
 
@@ -170,23 +170,23 @@ impl Renderer {
         pipeline.set_msaa_samples(&self.device, msaa_samples);
     }
 
-    pub fn set_capture_stream(&self, pipelines: &[&crate::Pipeline], clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::StreamFrame)>) {
+    pub fn start_recording(&self, pipelines: &[&crate::Pipeline], clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::VideoFrame)>) {
         let max_size_in_bytes = (max_buffer_size_in_megabytes * 1024. * 1024.) as usize;
-        let stream = crate::CaptureStream::new(&self, clear_color, max_size_in_bytes, process_function);
-        self.inner.borrow_mut().stream = Some(stream);
+        let recorder = crate::VideoRecorder::new(&self, clear_color, max_size_in_bytes, process_function);
+        self.inner.borrow_mut().recorder = Some(recorder);
 
         for (i, pipeline) in pipelines.iter().enumerate() {
             let is_last = i == pipelines.len() - 1;
-            let position = if is_last { crate::StreamPosition::Last } else { crate::StreamPosition::NotLast };
+            let position = if is_last { crate::RecordingPosition::Last } else { crate::RecordingPosition::NotLast };
             pipeline.set_stream_position(&self.device, position);
         }
     }
 
-    pub fn clear_capture_stream(&self, pipelines: &[&crate::Pipeline]) {
-        self.inner.borrow_mut().stream = None;
+    pub fn stop_recording(&self, pipelines: &[&crate::Pipeline]) {
+        self.inner.borrow_mut().recorder = None;
 
         for pipeline in pipelines {
-            let position = crate::StreamPosition::None;
+            let position = crate::RecordingPosition::None;
             pipeline.set_stream_position(&self.device, position);
         }
     }

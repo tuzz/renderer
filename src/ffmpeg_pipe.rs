@@ -25,7 +25,7 @@ impl FfmpegPipe {
         Command::new("ffmpeg").arg("-loglevel").arg("error").spawn().is_ok()
     }
 
-    pub fn write(&mut self, stream_frame: &crate::StreamFrame, png_bytes: Vec<u8>, timestamp: Option<&DateTime<Utc>>) {
+    pub fn write(&mut self, video_frame: &crate::VideoFrame, png_bytes: Vec<u8>, timestamp: Option<&DateTime<Utc>>) {
         if png_bytes.is_empty() && self.prev_bytes.is_none() { return; }
 
         if self.child.is_none() || self.timestamp_has_changed(timestamp) {
@@ -38,7 +38,7 @@ impl FfmpegPipe {
         let duplicate_frame = png_bytes.is_empty();
 
         if duplicate_frame {
-            eprintln!("Warning: Frame {} is {}. Duplicating previous frame to maintain a steady frame rate.", stream_frame.frame_number, stream_frame.status);
+            eprintln!("Warning: Frame {} is {}. Duplicating previous frame to maintain a steady frame rate.", video_frame.frame_number, video_frame.status);
 
             let duplicate = self.prev_bytes.as_ref().unwrap();
             stdin.write_all(duplicate).unwrap();
@@ -67,7 +67,7 @@ impl FfmpegPipe {
         command.arg("-f").arg("image2pipe");
 
         // TODO: Make this better. Ideally, we'd store a timestamp_offset on
-        // each stream frame since the start of the capture timestamp.
+        // each video frame since the start of the recording timestamp.
         //
         // We'd then use a Rust crate to do the encoding (e.g. rav1e) and
         // pass the explicit frame times through (variable frame rate - VRF).
