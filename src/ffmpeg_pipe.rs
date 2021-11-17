@@ -4,21 +4,27 @@ use std::thread;
 use chrono::{DateTime, Utc, SecondsFormat};
 
 pub struct FfmpegPipe {
+    pub audio_directory: Option<String>,
+    pub output_directory: Option<String>,
+    pub output_filename: Option<String>,
+    pub ffmpeg_args: Vec<String>,
+
     pub child: Option<Child>,
     pub timestamp: Option<DateTime<Utc>>,
-    pub base_directory: Option<String>,
-    pub filename: Option<String>,
     pub prev_bytes: Option<Vec<u8>>,
-    pub ffmpeg_args: Vec<String>,
 }
 
+// If audio_directory is provided, looks for an audio file with the same name as
+// the output_filename (or the timestamp) in that directory, e.g. recorded.wav
+
 impl FfmpegPipe {
-    pub fn new(base_directory: Option<&str>, filename: Option<&str>, ffmpeg_args: &[&str]) -> Self {
-        let base_directory = base_directory.map(|s| s.to_string());
-        let filename = filename.map(|s| s.to_string());
+    pub fn new(audio_directory: Option<&str>, output_directory: Option<&str>, output_filename: Option<&str>, ffmpeg_args: &[&str]) -> Self {
+        let audio_directory = audio_directory.map(|s| s.to_string());
+        let output_directory = output_directory.map(|s| s.to_string());
+        let output_filename = output_filename.map(|s| s.to_string());
         let ffmpeg_args = ffmpeg_args.iter().map(|s| s.to_string()).collect();
 
-        Self { child: None, timestamp: None, base_directory, filename, prev_bytes: None, ffmpeg_args }
+        Self { audio_directory, output_directory, output_filename, ffmpeg_args, child: None, timestamp: None, prev_bytes: None }
     }
 
     pub fn available() -> bool {
@@ -51,8 +57,8 @@ impl FfmpegPipe {
     fn timestamp_has_changed(&self, timestamp: Option<&DateTime<Utc>>) -> bool {
         if timestamp == self.timestamp.as_ref() { return false; }
 
-        if let Some(filename) = self.filename.as_ref() {
-            eprintln!("Warning: Compressed data contains multiple videos but only writing one file: {}", filename);
+        if let Some(output_filename) = self.output_filename.as_ref() {
+            eprintln!("Warning: Compressed data contains multiple videos but only writing one file: {}", output_filename);
         }
 
         true
@@ -66,41 +72,68 @@ impl FfmpegPipe {
         command.arg("-hide_banner").arg("-loglevel").arg("error").arg("-stats");
         command.arg("-f").arg("image2pipe");
 
-        // TODO: Make this better. Ideally, we'd store a timestamp_offset on
-        // each video frame since the start of the recording timestamp.
+        // TODO: Make this better. Ideally, we'd store elapsed_time on each
+        // video frame since the start of the recording timestamp.
         //
         // We'd then use a Rust crate to do the encoding (e.g. rav1e) and
         // pass the explicit frame times through (variable frame rate - VRF).
         //
-        // The timestamp_offset should be as close as possible to when the
-        // frame is displayed on screen (maybe the time the render pass ends?).
+        // The elapsed_time should be as close as possible to when the frame is
+        // displayed on screen (maybe the time the render pass ends?).
         //
-        // Doing this should make it easier to synchronize video with audio.
+        // Doing this should make it easier to synchronize video with audio from
+        // my AudioMixer crate which uses a similar pattern.
         command.arg("-framerate").arg("60");
 
         command.arg("-y").arg("-i").arg("-");
+
+        let (output_filename, output_path) = self.output_filename_and_path();
+
+        if let Some(wav_filename) = self.look_for_wav_file(&output_filename) {
+            command.arg("-i").arg(wav_filename);
+        }
 
         for arg in &self.ffmpeg_args {
             command.arg(arg);
         }
 
-        command.arg(&self.output_filename());
+        command.arg(output_path);
         command.stdin(Stdio::piped()).stdout(Stdio::piped());
 
         self.child = Some(command.spawn().unwrap());
     }
 
-    fn output_filename(&self) -> String {
-        let directory = self.base_directory.clone().unwrap_or_else(|| ".".to_string());
+    fn output_filename_and_path(&self) -> (String, String) {
+        let directory = self.output_directory.clone().unwrap_or_else(|| ".".to_string());
 
-        let filename = self.filename.clone().unwrap_or_else(|| {
+        let filename = self.output_filename.clone().unwrap_or_else(|| {
             let timestamp = self.timestamp.clone().unwrap_or_else(|| Utc::now());
             let formatted = timestamp.to_rfc3339_opts(SecondsFormat::Millis, true).replace(":", "_");
 
             format!("{}.mp4", formatted)
         });
 
-        Path::new(&directory).join(&filename).into_os_string().into_string().unwrap()
+        let path = Path::new(&directory).join(&filename).into_os_string().into_string().unwrap();
+
+        (filename, path)
+    }
+
+    fn look_for_wav_file(&self, output_filename: &str) -> Option<String> {
+        if let Some(directory) = self.audio_directory.as_ref() {
+            let mut path_buf = Path::new(directory).join(output_filename).to_path_buf();
+            path_buf.set_extension("wav");
+
+            let found = path_buf.exists();
+            let path = path_buf.into_os_string().into_string().unwrap();
+
+            if found {
+                return Some(path);
+            } else {
+                eprintln!("Skipping audio because {} doesn't exist", path);
+            }
+        }
+
+        None
     }
 }
 

@@ -99,8 +99,8 @@ fn main() {
     if renderer::Decompressor::can_run("recorded_frames") && renderer::FfmpegPipe::available() {
         println!("Creating a video of the last run of this example:");
 
-        let decompressor = renderer::Decompressor::new("recorded_frames", false);
-        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(None, Some("recorded_video.mp4"), &[
+        let decompressor = renderer::Decompressor::new("recorded_frames", true);
+        let mut ffmpeg_pipe = renderer::FfmpegPipe::new(None, None, Some("recorded.mp4"), &[
             "-c:v", "libx264", "-r", "60", "-pix_fmt", "yuv420p", "-movflags", "+faststart",
         ]);
 
@@ -111,7 +111,7 @@ fn main() {
             ffmpeg_pipe.write(&video_frame, png, Some(timestamp));
         }));
 
-        println!("Written recorded_video.mp4. Running the example again:");
+        println!("Written recorded.mp4. Running the example again:");
     }
 
     // Alternatively, you could skip compression/decompression and write PNGs directly.
