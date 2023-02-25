@@ -54,12 +54,12 @@ impl<'a> RenderPass<'a> {
         (self.renderer.window_size.width, self.renderer.window_size.height)
     }
 
-    fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<wgpu::RenderPassColorAttachment<'a>> {
-        let mut attachments = targets.iter().map(|t| self.color_attachment(t.view(&self.renderer), pipeline, clear)).collect::<Vec<_>>();
+    fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<Option<wgpu::RenderPassColorAttachment<'a>>> {
+        let mut attachments = targets.iter().map(|t| Some(self.color_attachment(t.view(&self.renderer), pipeline, clear))).collect::<Vec<_>>();
 
         match pipeline.position_in_recording {
             crate::RecordingPosition::None => {},
-            _ => attachments.push(self.renderer.recorder.as_ref().unwrap().color_attachment()),
+            _ => attachments.push(Some(self.renderer.recorder.as_ref().unwrap().color_attachment())),
         }
 
         attachments
@@ -79,7 +79,7 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-fn render_pass_descriptor<'a>(color_attachments: &'a [wgpu::RenderPassColorAttachment]) -> wgpu::RenderPassDescriptor<'a, 'a> {
+fn render_pass_descriptor<'a>(color_attachments: &'a [Option<wgpu::RenderPassColorAttachment>]) -> wgpu::RenderPassDescriptor<'a, 'a> {
     wgpu::RenderPassDescriptor { label: None, depth_stencil_attachment: None, color_attachments }
 }
 

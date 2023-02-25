@@ -1,8 +1,5 @@
-use std::{collections::VecDeque, rc, cell, pin};
-use std::{future::Future, task::Context, task::Poll};
+use std::{collections::VecDeque, rc, cell};
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
-use futures::FutureExt;
-use noop_waker::noop_waker;
 
 pub struct VideoRecorder {
     pub max_buffer_size_in_bytes: usize,
@@ -17,12 +14,12 @@ pub struct Inner {
 
     pub buffer_size_in_bytes: Arc<AtomicUsize>,
     pub video_frames: VecDeque<crate::VideoFrame>,
-    pub map_futures: VecDeque<Option<MapFuture>>,
+    pub frame_states: VecDeque<Arc<FrameState>>,
 
     pub frame_number: usize,
 }
 
-pub struct MapFuture(pin::Pin<Box<dyn Future<Output=Result<(), wgpu::BufferAsyncError>>>>);
+type FrameState = AtomicUsize; // 0=dropped, 1=mapping, 2=mapped, 3=failed-to-map
 
 impl VideoRecorder {
     pub fn new(renderer: &crate::Renderer, clear_color: Option<crate::ClearColor>, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(crate::VideoFrame)>) -> Self {
@@ -35,7 +32,7 @@ impl VideoRecorder {
 
             buffer_size_in_bytes: Arc::new(AtomicUsize::new(0)),
             video_frames: VecDeque::new(),
-            map_futures: VecDeque::new(),
+            frame_states: VecDeque::new(),
 
             frame_number: 0,
         };
@@ -134,14 +131,20 @@ impl VideoRecorder {
         let mut inner = self.inner.borrow_mut();
 
         for i in 0..inner.video_frames.len() {
-            if inner.map_futures.get(i).is_some() { continue; }
+            if inner.frame_states.get(i).is_some() { continue; }
             let video_frame = &inner.video_frames[i];
 
             if let Some(image_data) = &video_frame.image_data {
-                let future = image_data.buffer().slice(..).map_async(wgpu::MapMode::Read);
-                inner.map_futures.push_back(Some(MapFuture(future.boxed())));
+                let frame_state = Arc::new(AtomicUsize::new(1)); // 1=mapping
+                let frame_state_ = Arc::clone(&frame_state);
+
+                image_data.buffer().slice(..).map_async(wgpu::MapMode::Read, move |result| {
+                    frame_state_.store(if result.is_ok() { 2 } else { 3 }, Relaxed); // 2=mapped, 3=failed-to-map
+                });
+
+                inner.frame_states.push_back(frame_state);
             } else {
-                inner.map_futures.push_back(None);
+                inner.frame_states.push_back(Arc::new(AtomicUsize::new(0))); // 0=dropped
             }
         }
     }
@@ -151,32 +154,23 @@ impl VideoRecorder {
 
         loop {
             if inner.video_frames.is_empty() { break; }
-            let option = &mut inner.map_futures[0];
+            let frame_state = inner.frame_states[0].load(Relaxed);
 
-            // If the frame was dropped, immediately call the process function.
-            // Let it decide what to do with the dropped frame.
-            if option.is_none() {
-                let video_frame = inner.video_frames.pop_front().unwrap();
-                inner.map_futures.pop_front().unwrap();
-
-                (self.process_function)(video_frame);
-                continue;
-            }
-
-            let map_future = option.as_mut().unwrap();
-            let waker = noop_waker();
-            let mut context = Context::from_waker(&waker);
-
-            match map_future.0.as_mut().poll(&mut context) {
-                Poll::Pending => break,
-                Poll::Ready(result) => {
-                    result.unwrap(); // Panic if mapping failed.
-
+            match frame_state {
+                // If the frame was dropped or mapped, call the process function and keep going.
+                // Let the process function decide what to do with dropped frames.
+                0 | 2 => {
                     let video_frame = inner.video_frames.pop_front().unwrap();
-                    inner.map_futures.pop_front().unwrap();
-
+                    inner.frame_states.pop_front().unwrap();
                     (self.process_function)(video_frame);
-                },
+                }
+
+                // If the buffer is waiting to be mapped then break.
+                // Frames must be processed in order.
+                1 => break,
+
+                // If buffer mapping failed then panic since this is unexpected.
+                _ => panic!("Failed to memory map buffer data for a video frame."),
             }
         }
     }

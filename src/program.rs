@@ -44,7 +44,7 @@ fn create_shader_module(device: &wgpu::Device, bytes: &[u8]) -> wgpu::ShaderModu
     let spirv = wgpu::util::make_spirv(bytes);
     let descriptor = wgpu::ShaderModuleDescriptor { label: None, source: spirv };
 
-    device.create_shader_module(&descriptor)
+    device.create_shader_module(descriptor)
 }
 
 impl ops::Deref for Program {

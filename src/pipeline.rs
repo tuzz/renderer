@@ -130,18 +130,18 @@ fn next(binding_id: &mut u32) {
     *binding_id %= BINDINGS_PER_GROUP as u32;
 }
 
-fn create_color_target_states(targets: &[crate::Target], blend_mode: &crate::BlendMode, stream_position: &RecordingPosition) -> Vec<wgpu::ColorTargetState> {
-    let mut color_target_states = targets.iter().map(|t| blend_mode.state(t.format())).collect::<Vec<_>>();
+fn create_color_target_states(targets: &[crate::Target], blend_mode: &crate::BlendMode, stream_position: &RecordingPosition) -> Vec<Option<wgpu::ColorTargetState>> {
+    let mut color_target_states = targets.iter().map(|t| Some(blend_mode.state(t.format()))).collect::<Vec<_>>();
 
     match stream_position {
         RecordingPosition::None => {},
-        _ => color_target_states.push(blend_mode.state(crate::Format::RgbaU8)),
+        _ => color_target_states.push(Some(blend_mode.state(crate::Format::RgbaU8))),
     }
 
     color_target_states
 }
 
-fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], msaa_samples: u32, color_states: &[wgpu::ColorTargetState]) -> wgpu::RenderPipeline {
+fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, primitive: &crate::Primitive, layouts: &[wgpu::BindGroupLayout], msaa_samples: u32, color_states: &[Option<wgpu::ColorTargetState>]) -> wgpu::RenderPipeline {
     let attribute_descriptors = attribute_descriptors(&program.attributes);
     let vertex_buffers = vertex_buffers(&attribute_descriptors);
     let layout = create_layout(device, layouts);
@@ -232,7 +232,7 @@ fn vertex_state<'a>(module: &'a wgpu::ShaderModule, buffers: &'a [wgpu::VertexBu
     wgpu::VertexState { module, entry_point: "main", buffers }
 }
 
-fn fragment_state<'a>(module: &'a wgpu::ShaderModule, targets: &'a [wgpu::ColorTargetState]) -> wgpu::FragmentState<'a> {
+fn fragment_state<'a>(module: &'a wgpu::ShaderModule, targets: &'a [Option<wgpu::ColorTargetState>]) -> wgpu::FragmentState<'a> {
     wgpu::FragmentState { module, entry_point: "main", targets }
 }
 
