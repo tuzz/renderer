@@ -13,6 +13,7 @@ pub struct InnerT {
     pub size: (u32, u32),
     pub filter_mode: crate::FilterMode,
     pub format: crate::Format,
+    pub view_formats: Vec<wgpu::TextureFormat>,
     pub msaa_samples: u32,
     pub renderable: bool,
     pub copyable: bool,
@@ -21,11 +22,12 @@ pub struct InnerT {
 
 impl Texture {
     pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, msaa_samples: u32, renderable: bool, copyable: bool, with_sampler: bool) -> Self {
-        let texture = create_texture(device, size, &format, msaa_samples, renderable, copyable);
+        let view_formats = vec![format.texture_format()];
+        let texture = create_texture(device, size, &format, &view_formats, msaa_samples, renderable, copyable);
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let sampler = if with_sampler { Some(create_sampler(device, filter_mode)) } else { None };
-        let inner = InnerT { texture, view, sampler, size, format, msaa_samples, filter_mode, renderable, copyable, generation: 0 };
+        let inner = InnerT { texture, view, sampler, size, format, view_formats, msaa_samples, filter_mode, renderable, copyable, generation: 0 };
 
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
@@ -36,7 +38,7 @@ impl Texture {
 
         let mut inner = self.inner.borrow_mut();
         inner.size = new_size;
-        inner.texture = create_texture(device, inner.size, &inner.format, inner.msaa_samples, inner.renderable, inner.copyable);
+        inner.texture = create_texture(device, inner.size, &inner.format, &inner.view_formats, inner.msaa_samples, inner.renderable, inner.copyable);
         inner.view = inner.texture.create_view(&wgpu::TextureViewDescriptor::default());
         inner.generation += 1;
     }
@@ -104,7 +106,7 @@ impl Texture {
     }
 }
 
-fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, msaa_samples: u32, renderable: bool, copyable: bool) -> wgpu::Texture {
+fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, view_formats: &[wgpu::TextureFormat], msaa_samples: u32, renderable: bool, copyable: bool) -> wgpu::Texture {
     let mut usage = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST;
 
     if renderable { usage |= wgpu::TextureUsages::RENDER_ATTACHMENT; }
@@ -116,6 +118,7 @@ fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Forma
         sample_count: msaa_samples,
         dimension: wgpu::TextureDimension::D2,
         format: format.texture_format(),
+        view_formats,
         usage,
         label: None,
     };

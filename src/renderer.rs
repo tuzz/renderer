@@ -24,8 +24,8 @@ pub struct InnerR {
 impl Renderer {
     pub fn new(window: &window::Window) -> Self {
         let window_size = window.inner_size();
-        let instance = wgpu::Instance::new(wgpu::Backends::all());
-        let surface = unsafe { instance.create_surface(window) };
+        let instance = get_instance();
+        let surface = unsafe { instance.create_surface(window).unwrap() };
         let adapter = get_adapter(&instance, &surface);
         let (device, queue) = get_device(&adapter);
         let vsync = true;
@@ -308,11 +308,20 @@ fn configure_surface(surface: &wgpu::Surface, device: &wgpu::Device, window_size
         height: window_size.height,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: format.texture_format(),
+        view_formats: vec![format.texture_format()],
         present_mode,
         alpha_mode: wgpu::CompositeAlphaMode::Auto, // TODO: set an explicit alpha mode (check supported)
     });
 }
 
+fn get_instance() -> wgpu::Instance {
+    let descriptor = wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::all(),
+        dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+    };
+
+    wgpu::Instance::new(descriptor)
+}
 
 fn get_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adapter {
     let options = wgpu::RequestAdapterOptions {
