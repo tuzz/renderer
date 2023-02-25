@@ -155,6 +155,7 @@ fn create_render_pipeline(device: &wgpu::Device, program: &crate::Program, primi
         depth_stencil: None,
         multisample: multisample_state,
         fragment: Some(fragment_state(&program.fragment_shader, color_states)),
+        multiview: None,
     };
 
     device.create_render_pipeline(&descriptor)
@@ -199,7 +200,7 @@ fn primitive_state(primitive: &crate::Primitive) -> wgpu::PrimitiveState {
         strip_index_format: None,
         front_face: wgpu::FrontFace::default(),
         cull_mode: None,
-        clamp_depth: false,
+        unclipped_depth: false,
         polygon_mode: wgpu::PolygonMode::default(),
         conservative: false,
     }

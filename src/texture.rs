@@ -92,8 +92,13 @@ impl Texture {
     }
 
     fn sampler_binding_layout(&self, id: u32, visibility: &crate::Visibility) -> wgpu::BindGroupLayoutEntry {
-        let filtering = self.filter_mode.is_linear();
-        let ty = wgpu::BindingType::Sampler { comparison: false, filtering };
+        let binding_type = if self.filter_mode.is_linear() {
+            wgpu::SamplerBindingType::Filtering
+        } else {
+            wgpu::SamplerBindingType::NonFiltering
+        };
+
+        let ty = wgpu::BindingType::Sampler(binding_type);
 
         wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
     }
