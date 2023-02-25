@@ -226,7 +226,7 @@ fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_f
 
             // Decode video_frame.
             let result = bincode::decode_from_slice(&video_frame_bytes, decode_config);
-            let mut video_frame: crate::VideoFrame = match result { Ok(f) => f, _ => break }; // TODO: advance to next packet instead of breaking
+            let mut video_frame: crate::VideoFrame = match result { Ok((f, _)) => f, _ => break }; // TODO: advance to next packet instead of breaking
 
             if video_frame.image_data.is_some() {
                 // Read image_data.
@@ -251,7 +251,7 @@ fn spawn_worker<T: Send + 'static>(directory: &str, filename: &str, per_thread_f
 const U64_LEN: usize = mem::size_of::<u64>();
 
 fn decoding_config() -> bincode::config::Configuration {
-    bincode::config::Configuration::standard()
+    bincode::config::standard()
 }
 
 struct OrderableFrame<T>((crate::VideoFrame, T));

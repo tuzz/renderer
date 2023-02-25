@@ -84,14 +84,21 @@ impl Default for FrameStatus {
 
 #[cfg(feature="bincode")]
 impl bincode::Encode for ImageData {
-    fn encode<E: bincode::enc::Encoder>(&self, _encoder: E) -> Result<(), bincode::error::EncodeError> {
+    fn encode<E: bincode::enc::Encoder>(&self, _encoder: &mut E) -> Result<(), bincode::error::EncodeError> {
         Ok(())
     }
 }
 
 #[cfg(feature="bincode")]
 impl bincode::Decode for ImageData {
-    fn decode<D: bincode::de::Decoder>(mut _decoder: D) -> Result<Self, bincode::error::DecodeError> {
+    fn decode<D: bincode::de::Decoder>(mut _decoder: &mut D) -> Result<Self, bincode::error::DecodeError> {
+        Ok(ImageData::Bytes(vec![]))
+    }
+}
+
+#[cfg(feature="bincode")]
+impl<'a> bincode::BorrowDecode<'a> for ImageData {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'a>>(mut _decoder: &mut D) -> Result<Self, bincode::error::DecodeError> {
         Ok(ImageData::Bytes(vec![]))
     }
 }

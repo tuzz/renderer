@@ -144,7 +144,7 @@ fn compression_config(lz4_compression_level: u8) -> lz4f::Preferences {
 }
 
 fn encoding_config() -> bincode::config::Configuration {
-    bincode::config::Configuration::standard()
+    bincode::config::standard()
 }
 
 #[derive(Default)]
