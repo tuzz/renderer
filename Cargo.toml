@@ -6,15 +6,15 @@ edition = "2021"
 
 [dependencies]
 bincode = { version = "2.0.0-alpha.1", optional = true }
-bytemuck = "1.4"
-chrono = { version = "0.4", optional = true }
-crossbeam-channel = { version = "0.5.1", optional = true }
-futures = "0.3"
-lzzzz = { version = "0.8", optional = true }
-noop-waker = "0.1.0"
-num_cpus = { version = "1.13.0", optional = true }
-png = { version = "0.16", optional = true }
-shaderc = { version = "0.7", optional = true }
+bytemuck = "*"
+chrono = { version = "*", optional = true }
+crossbeam-channel = { version = "*", optional = true }
+futures = "*"
+lzzzz = { version = "*", optional = true }
+noop-waker = "*"
+num_cpus = { version = "*", optional = true }
+png = { version = "*", optional = true }
+shaderc = { version = "*", optional = true }
 wgpu = { version = "0.11.0", features = ["spirv"] }
 winit = "0.25"
 

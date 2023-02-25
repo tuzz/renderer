@@ -20,10 +20,10 @@ impl PngEncoder {
         let mut png = png::Encoder::new(writer, video_frame.width as u32, video_frame.height as u32);
 
         png.set_depth(png::BitDepth::Eight);
-        png.set_color(png::ColorType::RGBA);
+        png.set_color(png::ColorType::Rgba);
 
         let mut png_writer = png.write_header().unwrap();
-        let mut stream_writer = png_writer.stream_writer_with_size(video_frame.unpadded_bytes_per_row);
+        let mut stream_writer = png_writer.stream_writer_with_size(video_frame.unpadded_bytes_per_row).unwrap();
 
         let image_data = video_frame.image_data.as_ref().unwrap();
 

@@ -20,7 +20,7 @@ impl Compiler {
     }
 
     pub fn compile_shader(filename: &str, kind: ShaderKind) {
-        let mut compiler = shaderc::Compiler::new().unwrap();
+        let compiler = shaderc::Compiler::new().unwrap();
         let mut options = shaderc::CompileOptions::new().unwrap();
 
         options.set_optimization_level(OptimizationLevel::Performance);

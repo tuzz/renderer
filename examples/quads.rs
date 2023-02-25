@@ -171,10 +171,10 @@ fn load_image(bytes: &[u8]) -> (Vec<u8>, u32, u32) {
     // Don't strip the alpha channel from the png.
     decoder.set_transformations(png::Transformations::IDENTITY);
 
-    let (info, mut reader) = decoder.read_info().unwrap();
-    let mut buffer = vec![0; info.buffer_size()];
+    let mut reader = decoder.read_info().unwrap();
+    let mut buffer = vec![0; reader.output_buffer_size()];
 
-    reader.next_frame(&mut buffer).unwrap();
+    let info = reader.next_frame(&mut buffer).unwrap();
     premultiply_alpha(&mut buffer);
 
     (buffer, info.width, info.height)
