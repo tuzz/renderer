@@ -309,6 +309,7 @@ fn configure_surface(surface: &wgpu::Surface, device: &wgpu::Device, window_size
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: format.texture_format(),
         present_mode,
+        alpha_mode: wgpu::CompositeAlphaMode::Auto, // TODO: set an explicit alpha mode (check supported)
     });
 }
 
