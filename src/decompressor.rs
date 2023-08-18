@@ -110,7 +110,7 @@ fn order_frames_from_worker_threads<T>(mut workers: Vec<Worker<T>>, in_order_fun
         //
         // Therefore, keep consuming until a frame with real image data is received so
         // that we mimic the thread balancing pattern from the compression side.
-        let drained = workers.drain_filter(|worker| {
+        let drained = workers.extract_if(|worker| {
             loop {
                 if let Ok((video_frame, t)) = worker.receiver.recv() {
                     let has_image_data = video_frame.image_data.is_some();

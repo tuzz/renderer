@@ -1,5 +1,4 @@
 use std::{cell, ops, rc};
-use std::num::NonZeroU32;
 
 #[derive(Clone)]
 pub struct Texture {
@@ -138,7 +137,7 @@ fn create_sampler(device: &wgpu::Device, filter_mode: crate::FilterMode) -> wgpu
         mag_filter: filter_mode.to_wgpu(),
         min_filter: filter_mode.to_wgpu(),
         mipmap_filter: wgpu::FilterMode::Nearest,
-        anisotropy_clamp: None,
+        anisotropy_clamp: 1,
         border_color: None,
         lod_min_clamp: 0.,
         lod_max_clamp: 0.,
@@ -161,7 +160,7 @@ fn image_copy_texture(texture: &wgpu::Texture, (x, y): (u32, u32)) -> wgpu::Imag
 fn image_data_layout(bytes_per_row: u32) -> wgpu::ImageDataLayout {
     wgpu::ImageDataLayout {
         offset: 0,
-        bytes_per_row: Some(NonZeroU32::new(bytes_per_row).unwrap()),
+        bytes_per_row: Some(bytes_per_row),
         rows_per_image: None,
     }
 }
