@@ -298,11 +298,9 @@ impl Renderer {
 fn configure_surface(surface: &wgpu::Surface, device: &wgpu::Device, window_size: &dpi::PhysicalSize<u32>, vsync: bool) {
     let format = crate::Target::Screen.format();
 
-    // Mailbox might also be available for low-latency triple buffering, but
-    // this consumes more power so isn't great for mobile devices / laptops.
     let present_mode = match vsync {
-        true => wgpu::PresentMode::Fifo,
-        false => wgpu::PresentMode::Immediate,
+        true => wgpu::PresentMode::AutoVsync,
+        false => wgpu::PresentMode::AutoNoVsync,
     };
 
     surface.configure(device, &wgpu::SurfaceConfiguration {
