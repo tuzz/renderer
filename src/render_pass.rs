@@ -11,8 +11,11 @@ impl<'a> RenderPass<'a> {
     }
 
     pub fn render(&self, targets: &[&crate::Target], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
-        pipeline.recreate_on_buffer_or_texture_resize(&self.renderer.device, self.window_size(), targets);
-        self.renderer.recorder.as_ref().map(|s| s.inner.borrow_mut().recording_texture.resize(&self.renderer.device, self.window_size()));
+        let window_size = self.window_size();
+        let size = (window_size.0, window_size.1, 1);
+
+        pipeline.recreate_on_buffer_or_texture_resize(&self.renderer.device, window_size, targets);
+        self.renderer.recorder.as_ref().map(|s| s.inner.borrow_mut().recording_texture.resize(&self.renderer.device, size));
 
         let color_attachments = self.color_attachments(targets, pipeline, clear);
         let descriptor = render_pass_descriptor(&color_attachments);

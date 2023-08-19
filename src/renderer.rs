@@ -53,7 +53,7 @@ impl Renderer {
         configure_surface(&inner.surface, &inner.device, &new_size, inner.vsync);
     }
 
-    pub fn resize_texture(&self, texture: &mut crate::Texture, new_size: (u32, u32)) {
+    pub fn resize_texture(&self, texture: &mut crate::Texture, new_size: (u32, u32, u32)) {
         texture.resize(&self.device, new_size);
     }
 
@@ -144,11 +144,13 @@ impl Renderer {
         }
     }
 
-    pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[T]) {
-        self.set_part_of_texture(pipeline, index_tuple, (0, 0), (0, 0), data);
+    pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), layers_data: &[&[T]]) {
+        for (layer, data) in layers_data.iter().enumerate() {
+            self.set_part_of_texture(pipeline, index_tuple, (0, 0, layer as u32), (0, 0), data);
+        }
     }
 
-    pub fn set_part_of_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), offset: (u32, u32), size: (u32, u32), data: &[T]) {
+    pub fn set_part_of_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), offset: (u32, u32, u32), size: (u32, u32), data: &[T]) {
         let index = index_tuple.0 * BINDINGS_PER_GROUP + index_tuple.1;
         let relative_index = texture_index(index, &pipeline.program);
 
@@ -212,8 +214,8 @@ impl Renderer {
         crate::Uniform::new(&self.device)
     }
 
-    pub fn texture(&self, width: u32, height: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, copyable: bool, with_sampler: bool) -> crate::Texture {
-        crate::Texture::new(&self.device, (width, height), filter_mode, format, 1, renderable, copyable, with_sampler)
+    pub fn texture(&self, width: u32, height: u32, layers: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, copyable: bool, with_sampler: bool) -> crate::Texture {
+        crate::Texture::new(&self.device, (width, height, layers), filter_mode, format, 1, renderable, copyable, with_sampler)
     }
 
     pub fn program(&self, vert: &[u8], frag: &[u8], attributes: crate::Attributes, instances: crate::Instances, uniforms: crate::Uniforms, textures: crate::Textures) -> crate::Program {

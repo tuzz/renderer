@@ -41,8 +41,8 @@ fn main() {
     // The x, y offset for all vertices of each instanced quad.
     let i_offset = renderer.instanced();
 
-    // The texture binding for the fragment shader (renderable=false, copyable=false, with_sampler=true).
-    let t_texture = renderer.texture(width, height, filter, format, false, false, true);
+    // The texture binding for the fragment shader (layers=1, renderable=false, copyable=false, with_sampler=true).
+    let t_texture = renderer.texture(width, height, 1, filter, format, false, false, true);
 
     // Create a shader program with some attributes, instanced attributes,
     // uniforms and textures. The attributes are indexed separately and the rest
@@ -84,7 +84,7 @@ fn main() {
     // Set all the data that won't change per render. Quads are made of four x, y coordinates.
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
     renderer.set_attribute(&pipeline, A_TEX_COORD, &[0., 1., 0., 0., 1., 1., 1., 0.]);
-    renderer.set_texture(&pipeline, T_TEXTURE, &image);
+    renderer.set_texture(&pipeline, T_TEXTURE, &[&image]);
 
     // The renderer can also record raw frames by adding f_recording to your shaders.
     // This is very CPU and data intensive (2GB/s at 4K60) so it's recommended to:

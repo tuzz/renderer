@@ -19,9 +19,9 @@ impl Target {
         }
     }
 
-    pub fn size(&self, window_size: (u32, u32)) -> (u32, u32) {
+    pub fn size(&self, window_size: (u32, u32)) -> (u32, u32, u32) {
         match self {
-            crate::Target::Screen => window_size,
+            crate::Target::Screen => (window_size.0, window_size.1, 1),
             crate::Target::Texture(t) => t.size,
         }
     }

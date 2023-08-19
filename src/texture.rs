@@ -9,7 +9,7 @@ pub struct InnerT {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: Option<wgpu::Sampler>,
-    pub size: (u32, u32),
+    pub size: (u32, u32, u32),
     pub filter_mode: crate::FilterMode,
     pub format: crate::Format,
     pub view_formats: Vec<wgpu::TextureFormat>,
@@ -20,10 +20,10 @@ pub struct InnerT {
 }
 
 impl Texture {
-    pub fn new(device: &wgpu::Device, size: (u32, u32), filter_mode: crate::FilterMode, format: crate::Format, msaa_samples: u32, renderable: bool, copyable: bool, with_sampler: bool) -> Self {
+    pub fn new(device: &wgpu::Device, size: (u32, u32, u32), filter_mode: crate::FilterMode, format: crate::Format, msaa_samples: u32, renderable: bool, copyable: bool, with_sampler: bool) -> Self {
         let view_formats = vec![format.texture_format()];
         let texture = create_texture(device, size, &format, &view_formats, msaa_samples, renderable, copyable);
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = create_texture_view(&texture, size.2);
 
         let sampler = if with_sampler { Some(create_sampler(device, filter_mode)) } else { None };
         let inner = InnerT { texture, view, sampler, size, format, view_formats, msaa_samples, filter_mode, renderable, copyable, generation: 0 };
@@ -31,27 +31,28 @@ impl Texture {
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, new_size: (u32, u32)) {
-        if self.size == new_size { return; }
-        if new_size.0 == 0 || new_size.1 == 0 { return; }
+    pub fn resize(&mut self, device: &wgpu::Device, new_size: (u32, u32, u32)) {
+        if self.size.0 == new_size.0 && self.size.1 == new_size.1 { return; }
+        if new_size.0 == 0 || new_size.1 == 0 || new_size.2 == 0 { return; }
 
         let mut inner = self.inner.borrow_mut();
         inner.size = new_size;
         inner.texture = create_texture(device, inner.size, &inner.format, &inner.view_formats, inner.msaa_samples, inner.renderable, inner.copyable);
-        inner.view = inner.texture.create_view(&wgpu::TextureViewDescriptor::default());
+        inner.view = create_texture_view(&inner.texture, new_size.2);
         inner.generation += 1;
     }
 
-    pub fn set_data<T: bytemuck::Pod>(&self, queue: &wgpu::Queue, offset: (u32, u32), size: (u32, u32), data: &[T]) {
-        let size = if size == (0, 0) { self.size } else { size };
+    pub fn set_data<T: bytemuck::Pod>(&self, queue: &wgpu::Queue, offset: (u32, u32, u32), size: (u32, u32), data: &[T]) {
+        let size = if size == (0, 0) { (self.size.0, self.size.1) } else { size };
         let total_bytes = bytemuck::cast_slice(data);
 
         let texture_copy = image_copy_texture(&self.texture, offset);
 
         let bytes_per_row = size.0 * self.format.bytes_per_texel();
-        let data_layout = image_data_layout(bytes_per_row);
+        let rows_per_image = size.1;
+        let data_layout = image_data_layout(bytes_per_row, rows_per_image);
 
-        queue.write_texture(texture_copy, total_bytes, data_layout, extent(size));
+        queue.write_texture(texture_copy, total_bytes, data_layout, extent((size.0, size.1, 1)));
     }
 
     pub fn texture_binding(&self, visibility: &crate::Visibility, id: u32) -> (wgpu::BindGroupEntry, wgpu::BindGroupLayoutEntry) {
@@ -61,12 +62,12 @@ impl Texture {
         (binding, layout)
     }
 
-    pub fn image_copy_texture(&self, (x, y): (u32, u32)) -> wgpu::ImageCopyTexture {
-        image_copy_texture(&self.texture, (x, y))
+    pub fn image_copy_texture(&self, (x, y, z): (u32, u32, u32)) -> wgpu::ImageCopyTexture {
+        image_copy_texture(&self.texture, (x, y, z))
     }
 
-    pub fn image_data_layout(&self, bytes_per_row: u32) -> wgpu::ImageDataLayout {
-        image_data_layout(bytes_per_row)
+    pub fn image_data_layout(&self, bytes_per_row: u32, rows_per_image: u32) -> wgpu::ImageDataLayout {
+        image_data_layout(bytes_per_row, rows_per_image)
     }
 
     pub fn extent(&self) -> wgpu::Extent3d {
@@ -82,11 +83,12 @@ impl Texture {
 
     fn texture_binding_layout(&self, id: u32, visibility: &crate::Visibility, format: &crate::Format) -> wgpu::BindGroupLayoutEntry {
         let filterable = self.filter_mode.is_linear();
+        let view_dimension = if self.size.2 == 1 { wgpu::TextureViewDimension::D2 } else { wgpu::TextureViewDimension::D2Array };
 
         let ty = wgpu::BindingType::Texture {
             sample_type: format.sample_type(filterable),
-            view_dimension: wgpu::TextureViewDimension::D2,
             multisampled: self.msaa_samples > 1,
+            view_dimension,
         };
 
         wgpu::BindGroupLayoutEntry { binding: id, visibility: visibility.shader_stage(), ty, count: None }
@@ -105,7 +107,7 @@ impl Texture {
     }
 }
 
-fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Format, view_formats: &[wgpu::TextureFormat], msaa_samples: u32, renderable: bool, copyable: bool) -> wgpu::Texture {
+fn create_texture(device: &wgpu::Device, size: (u32, u32, u32), format: &crate::Format, view_formats: &[wgpu::TextureFormat], msaa_samples: u32, renderable: bool, copyable: bool) -> wgpu::Texture {
     let mut usage = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST;
 
     if renderable { usage |= wgpu::TextureUsages::RENDER_ATTACHMENT; }
@@ -125,8 +127,15 @@ fn create_texture(device: &wgpu::Device, size: (u32, u32), format: &crate::Forma
     device.create_texture(&descriptor)
 }
 
-fn extent((width, height): (u32, u32)) -> wgpu::Extent3d {
-    wgpu::Extent3d { width, height, depth_or_array_layers: 1 }
+fn create_texture_view(texture: &wgpu::Texture, layers: u32) -> wgpu::TextureView {
+    let view_dimension = if layers == 1 { wgpu::TextureViewDimension::D2 } else { wgpu::TextureViewDimension::D2Array };
+    let descriptor = wgpu::TextureViewDescriptor { dimension: Some(view_dimension), ..wgpu::TextureViewDescriptor::default() };
+
+    texture.create_view(&descriptor)
+}
+
+fn extent((width, height, depth_or_array_layers): (u32, u32, u32)) -> wgpu::Extent3d {
+    wgpu::Extent3d { width, height, depth_or_array_layers }
 }
 
 fn create_sampler(device: &wgpu::Device, filter_mode: crate::FilterMode) -> wgpu::Sampler {
@@ -148,20 +157,20 @@ fn create_sampler(device: &wgpu::Device, filter_mode: crate::FilterMode) -> wgpu
     device.create_sampler(&descriptor)
 }
 
-fn image_copy_texture(texture: &wgpu::Texture, (x, y): (u32, u32)) -> wgpu::ImageCopyTexture {
+fn image_copy_texture(texture: &wgpu::Texture, (x, y, z): (u32, u32, u32)) -> wgpu::ImageCopyTexture {
     wgpu::ImageCopyTexture {
         aspect: wgpu::TextureAspect::All,
         texture: texture,
         mip_level: 0,
-        origin: wgpu::Origin3d { x, y, z: 0 },
+        origin: wgpu::Origin3d { x, y, z },
     }
 }
 
-fn image_data_layout(bytes_per_row: u32) -> wgpu::ImageDataLayout {
+fn image_data_layout(bytes_per_row: u32, rows_per_image: u32) -> wgpu::ImageDataLayout {
     wgpu::ImageDataLayout {
         offset: 0,
         bytes_per_row: Some(bytes_per_row),
-        rows_per_image: None,
+        rows_per_image: Some(rows_per_image),
     }
 }
 

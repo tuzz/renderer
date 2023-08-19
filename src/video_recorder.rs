@@ -23,7 +23,7 @@ type FrameState = AtomicUsize; // 0=dropped, 1=mapping, 2=mapped, 3=failed-to-ma
 
 impl VideoRecorder {
     pub fn new(renderer: &crate::Renderer, clear_color: Option<crate::ClearColor>, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(crate::VideoFrame)>) -> Self {
-        let size = (renderer.window_size.width, renderer.window_size.height);
+        let size = (renderer.window_size.width, renderer.window_size.height, 1);
 
         let inner = Inner {
             recording_texture: create_recording_texture(&renderer.device, size),
@@ -113,11 +113,11 @@ impl VideoRecorder {
         let margin_x = viewport.map(|v| v.margin_x.ceil() as u32).unwrap_or(0);
         let margin_y = viewport.map(|v| v.margin_y.ceil() as u32).unwrap_or(0);
 
-        let image_copy = inner.recording_texture.image_copy_texture((margin_x, margin_y));
+        let image_copy = inner.recording_texture.image_copy_texture((margin_x, margin_y, 0));
 
         let buffer_copy = wgpu::ImageCopyBuffer {
             buffer: image_data.buffer(),
-            layout: inner.recording_texture.image_data_layout(video_frame.padded_bytes_per_row as u32),
+            layout: inner.recording_texture.image_data_layout(video_frame.padded_bytes_per_row as u32, video_frame.height as u32),
         };
 
         let mut extent = inner.recording_texture.extent();
@@ -176,7 +176,7 @@ impl VideoRecorder {
     }
 }
 
-fn create_recording_texture(device: &wgpu::Device, size: (u32, u32)) -> crate::Texture {
+fn create_recording_texture(device: &wgpu::Device, size: (u32, u32, u32)) -> crate::Texture {
     let filter_mode = crate::FilterMode::Nearest; // Not used
     let format = crate::Format::RgbaU8;
     let msaa_samples = 1;

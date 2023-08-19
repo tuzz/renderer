@@ -1,6 +1,7 @@
 #version 310 es
 
 precision highp float;
+precision highp texture2DArray;
 precision highp sampler;
 
 layout(set=0, binding=1) uniform texture2D t_texture;
