@@ -114,22 +114,14 @@ impl Renderer {
 
     pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
         let attribute = pipeline.program.attributes.iter().find(|a| a.location == location).unwrap();
-        let option = attribute.buffer.set_data(&self.device, data);
-
-        if let Some(cbuffer) = option {
-            self.inner.borrow_mut().commands.push(cbuffer);
-        }
+        attribute.buffer.set_data(&self.device, &self.queue, data);
     }
 
     pub fn set_instanced(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[f32]) {
         let index = index_tuple.0 * BINDINGS_PER_GROUP + index_tuple.1;
 
         let instanced = &pipeline.program.instances[index];
-        let option = instanced.buffer.set_data(&self.device, data);
-
-        if let Some(cbuffer) = option {
-            self.inner.borrow_mut().commands.push(cbuffer);
-        }
+        instanced.buffer.set_data(&self.device, &self.queue, data);
     }
 
     pub fn set_uniform(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[f32]) {
@@ -137,11 +129,7 @@ impl Renderer {
         let relative_index = uniform_index(index, &pipeline.program);
 
         let (uniform, _) = &pipeline.program.uniforms[relative_index];
-        let option = uniform.buffer.set_data(&self.device, data);
-
-        if let Some(cbuffer) = option {
-            self.inner.borrow_mut().commands.push(cbuffer);
-        }
+        uniform.buffer.set_data(&self.device, &self.queue, data);
     }
 
     pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), layers_data: &[&[T]]) {

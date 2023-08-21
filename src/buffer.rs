@@ -1,5 +1,4 @@
 use std::{cell, mem, ops, rc};
-use wgpu::util::DeviceExt;
 
 #[derive(Clone)]
 pub struct Buffer {
@@ -24,7 +23,7 @@ impl Buffer {
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
-    pub fn set_data(&self, device: &wgpu::Device, data: &[f32]) -> Option<wgpu::CommandBuffer> {
+    pub fn set_data(&self, device: &wgpu::Device, queue: &wgpu::Queue, data: &[f32]) {
         let mut inner = self.inner.borrow_mut();
         let bytes = bytemuck::cast_slice(data);
 
@@ -32,19 +31,10 @@ impl Buffer {
             let (buffer, size) = create_buffer_with_headroom(device, inner.usage, bytes);
 
             inner.buffer = buffer;
-            inner.usage |= wgpu::BufferUsages::COPY_SRC;
             inner.size = size;
             inner.generation += 1;
-
-            None
         } else {
-            let descriptor = wgpu::util::BufferInitDescriptor { label: None, contents: bytes, usage: wgpu::BufferUsages::COPY_SRC };
-            let staging = device.create_buffer_init(&descriptor);
-
-            let mut encoder = create_command_encoder(device);
-            encoder.copy_buffer_to_buffer(&staging, 0, &inner.buffer, 0, bytes.len() as u64);
-
-            Some(encoder.finish())
+            queue.write_buffer(&inner.buffer, 0, bytes);
         }
     }
 
@@ -69,10 +59,6 @@ fn create_buffer_with_headroom(device: &wgpu::Device, usage: wgpu::BufferUsages,
     buffer.unmap();
 
     (buffer, buffer_size)
-}
-
-fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {
-    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None })
 }
 
 impl ops::Deref for Buffer {
