@@ -4,10 +4,10 @@ use std::sync::{Arc, atomic::{AtomicUsize, Ordering::Relaxed}};
 pub struct VideoRecorder {
     pub max_buffer_size_in_bytes: usize,
     pub process_function: Box<dyn FnMut(crate::VideoFrame)>,
-    pub inner: rc::Rc<cell::RefCell<Inner>>,
+    pub inner: rc::Rc<cell::RefCell<InnerV>>,
 }
 
-pub struct Inner {
+pub struct InnerV {
     pub recording_texture: crate::Texture,
     pub clear_color: Option<crate::ClearColor>,
     pub cleared_this_frame: bool,
@@ -25,7 +25,7 @@ impl VideoRecorder {
     pub fn new(renderer: &crate::Renderer, clear_color: Option<crate::ClearColor>, max_buffer_size_in_bytes: usize, process_function: Box<dyn FnMut(crate::VideoFrame)>) -> Self {
         let size = (renderer.window_size.width, renderer.window_size.height, 1);
 
-        let inner = Inner {
+        let inner = InnerV {
             recording_texture: create_recording_texture(&renderer.device, size),
             cleared_this_frame: false,
             clear_color,
