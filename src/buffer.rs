@@ -10,6 +10,7 @@ pub struct InnerB {
     pub usage: wgpu::BufferUsages,
     pub size: usize,
     pub generation: u32,
+    pub previous: u64,
 }
 
 const INITIAL_SIZE: usize = mem::size_of::<f32>() * 16; // Enough for a mat4 uniform.
@@ -18,13 +19,17 @@ const HEADROOM: usize = mem::size_of::<f32>() * 256;
 impl Buffer {
     pub fn new(device: &wgpu::Device, usage: wgpu::BufferUsages) -> Self {
         let buffer = create_buffer(device, usage);
-        let inner = InnerB { buffer, usage, size: INITIAL_SIZE, generation: 0 };
+        let inner = InnerB { buffer, usage, size: INITIAL_SIZE, generation: 0, previous: u64::MAX };
 
         Self { inner: rc::Rc::new(cell::RefCell::new(inner)) }
     }
 
-    pub fn set_data(&self, device: &wgpu::Device, queue: &wgpu::Queue, data: &[f32]) {
+    pub fn set_data(&self, device: &wgpu::Device, queue: &wgpu::Queue, data: &[f32], flushes: u64) {
         let mut inner = self.inner.borrow_mut();
+
+        if flushes == inner.previous { panic!("Wasteful call to buffer.set_data(). The previous data would be overridden."); }
+        inner.previous = flushes;
+
         let bytes = bytemuck::cast_slice(data);
 
         if bytes.len() > inner.size {

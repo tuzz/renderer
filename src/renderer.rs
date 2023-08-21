@@ -1,5 +1,6 @@
 use crate::*;
 use std::{cell, ops};
+use std::sync::atomic;
 use futures::executor;
 use winit::{dpi, window};
 
@@ -19,6 +20,7 @@ pub struct InnerR {
     pub frame_view: Option<wgpu::TextureView>,
     pub commands: Vec<wgpu::CommandBuffer>,
     pub recorder: Option<crate::VideoRecorder>,
+    pub flushes: atomic::AtomicU64,
 }
 
 impl Renderer {
@@ -36,7 +38,8 @@ impl Renderer {
         let frame_view = Some(frame.as_ref().unwrap().texture.create_view(&wgpu::TextureViewDescriptor::default()));
         let commands = vec![];
         let recorder = None;
-        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, frame, frame_view, commands, recorder };
+        let flushes = atomic::AtomicU64::new(0);
+        let inner = InnerR { window_size, instance, surface, adapter, device, queue, vsync, frame, frame_view, commands, recorder, flushes };
 
         Self { inner: cell::RefCell::new(inner) }
     }
@@ -110,18 +113,23 @@ impl Renderer {
 
     pub fn flush(&self) {
         self.queue.submit(self.inner.borrow_mut().commands.drain(..));
+        self.flushes.fetch_add(1, atomic::Ordering::Relaxed);
     }
 
     pub fn set_attribute(&self, pipeline: &crate::Pipeline, location: usize, data: &[f32]) {
         let attribute = pipeline.program.attributes.iter().find(|a| a.location == location).unwrap();
-        attribute.buffer.set_data(&self.device, &self.queue, data);
+        let flushes = self.flushes.load(atomic::Ordering::Relaxed);
+
+        attribute.buffer.set_data(&self.device, &self.queue, data, flushes);
     }
 
     pub fn set_instanced(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[f32]) {
         let index = index_tuple.0 * BINDINGS_PER_GROUP + index_tuple.1;
 
         let instanced = &pipeline.program.instances[index];
-        instanced.buffer.set_data(&self.device, &self.queue, data);
+        let flushes = self.flushes.load(atomic::Ordering::Relaxed);
+
+        instanced.buffer.set_data(&self.device, &self.queue, data, flushes);
     }
 
     pub fn set_uniform(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), data: &[f32]) {
@@ -129,7 +137,9 @@ impl Renderer {
         let relative_index = uniform_index(index, &pipeline.program);
 
         let (uniform, _) = &pipeline.program.uniforms[relative_index];
-        uniform.buffer.set_data(&self.device, &self.queue, data);
+        let flushes = self.flushes.load(atomic::Ordering::Relaxed);
+
+        uniform.buffer.set_data(&self.device, &self.queue, data, flushes);
     }
 
     pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: &crate::Pipeline, index_tuple: (usize, usize), layers_data: &[&[T]]) {
