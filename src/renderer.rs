@@ -220,76 +220,76 @@ impl Renderer {
         crate::Program::new(&self.device, vert, frag, attributes, instances, uniforms, textures)
     }
 
-    pub fn screen_target(&self) -> crate::Target {
+    pub fn viewport(&self, aspect_x: f32, aspect_y: f32) -> crate::Viewport {
+        crate::Viewport::new(aspect_x, aspect_y, self.window_size.width as f32, self.window_size.height as f32)
+    }
+
+    pub fn screen_target() -> crate::Target {
         crate::Target::Screen
     }
 
-    pub fn texture_target(&self, texture: crate::Texture) -> crate::Target {
+    pub fn texture_target(texture: crate::Texture) -> crate::Target {
         crate::Target::Texture(texture)
     }
 
-    pub fn bgra_u8(&self) -> crate::Format {
+    pub fn bgra_u8() -> crate::Format {
         crate::Format::BgraU8
     }
 
-    pub fn red_u8(&self) -> crate::Format {
+    pub fn red_u8() -> crate::Format {
         crate::Format::RU8
     }
 
-    pub fn rgba_u8(&self) -> crate::Format {
+    pub fn rgba_u8() -> crate::Format {
         crate::Format::RgbaU8
     }
 
-    pub fn rgba_f16(&self) -> crate::Format {
+    pub fn rgba_f16() -> crate::Format {
         crate::Format::RgbaF16
     }
 
-    pub fn rgba_f32(&self) -> crate::Format {
+    pub fn rgba_f32() -> crate::Format {
         crate::Format::RgbaF32
     }
 
-    pub fn linear_filtering(&self) -> crate::FilterMode {
+    pub fn linear_filtering() -> crate::FilterMode {
         crate::FilterMode::Linear
     }
 
-    pub fn nearest_filtering(&self) -> crate::FilterMode {
+    pub fn nearest_filtering() -> crate::FilterMode {
         crate::FilterMode::Nearest
     }
 
-    pub fn visible_to_vertex_shader(&self) -> crate::Visibility {
+    pub fn visible_to_vertex_shader() -> crate::Visibility {
         crate::Visibility::VertexShader
     }
 
-    pub fn visible_to_fragment_shader(&self) -> crate::Visibility {
+    pub fn visible_to_fragment_shader() -> crate::Visibility {
         crate::Visibility::FragmentShader
     }
 
-    pub fn visible_to_both_shaders(&self) -> crate::Visibility {
+    pub fn visible_to_both_shaders() -> crate::Visibility {
         crate::Visibility::BothShaders
     }
 
-    pub fn additive_blend(&self) -> crate::BlendMode {
+    pub fn additive_blend() -> crate::BlendMode {
         crate::BlendMode::additive()
     }
 
-    pub fn pre_multiplied_blend(&self) -> crate::BlendMode {
+    pub fn pre_multiplied_blend() -> crate::BlendMode {
         crate::BlendMode::pre_multiplied_alpha()
     }
 
-    pub fn triangle_primitive(&self) -> crate::Primitive {
+    pub fn triangle_primitive() -> crate::Primitive {
         crate::Primitive::Triangle
     }
 
-    pub fn triangle_strip_primitive(&self) -> crate::Primitive {
+    pub fn triangle_strip_primitive() -> crate::Primitive {
         crate::Primitive::TriangleStrip
     }
 
-    pub fn clear_color(&self, red: f32, green: f32, blue: f32, alpha: f32) -> crate::ClearColor {
+    pub fn clear_color(red: f32, green: f32, blue: f32, alpha: f32) -> crate::ClearColor {
         crate::ClearColor::new(red, green, blue, alpha)
-    }
-
-    pub fn viewport(&self, aspect_x: f32, aspect_y: f32) -> crate::Viewport {
-        crate::Viewport::new(aspect_x, aspect_y, self.window_size.width as f32, self.window_size.height as f32)
     }
 }
 

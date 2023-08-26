@@ -1,3 +1,4 @@
+use renderer::Renderer;
 use std::sync::Arc;
 use winit::{event, event_loop, window};
 
@@ -15,7 +16,7 @@ fn main() {
     // Create a winit window and a renderer for that window.
     let event_loop = event_loop::EventLoop::new();
     let window = window::WindowBuilder::new().build(&event_loop).unwrap();
-    let renderer = renderer::Renderer::new(&window);
+    let renderer = Renderer::new(&window);
 
     // Read the compiled vertex and fragment shader from disk. When making
     // changes you need to run the example twice (once first to compile).
@@ -27,10 +28,10 @@ fn main() {
     let (image, width, height) = load_image(letter_f);
 
     // The format of the texture is RGBA with 8 bits per channel.
-    let format = renderer.rgba_u8();
+    let format = Renderer::rgba_u8();
 
     // Use linear filtering when sampling the texture.
-    let filter = renderer.linear_filtering();
+    let filter = Renderer::linear_filtering();
 
     // The x, y position for each vertex of the singular quad.
     let a_position = renderer.attribute(A_POSITION, 2);
@@ -55,14 +56,14 @@ fn main() {
     ], vec![
         // no uniforms
     ], vec![
-        (t_texture, renderer.visible_to_fragment_shader()), // set 0, binding 1
+        (t_texture, Renderer::visible_to_fragment_shader()), // set 0, binding 1
     ]);
 
     // We've already pre-multiplied the rgb channels by alpha in our texture (below).
-    let blend_mode = renderer.pre_multiplied_blend();
+    let blend_mode = Renderer::pre_multiplied_blend();
 
     // We're going to render a triangle strip to reuse vertices (indexes not supported).
-    let primitive = renderer.triangle_strip_primitive();
+    let primitive = Renderer::triangle_strip_primitive();
 
     // We don't need to anti-alias the quads example because all lines align with pixels
     // There's currently no way to get the supported number of samples from WGPU. Currently:
@@ -75,11 +76,11 @@ fn main() {
     let msaa_samples = 1;
 
     // We're going to render to the screen but you _could_ render to a texture, too.
-    let target = renderer.screen_target();
+    let target = Renderer::screen_target();
 
     // Build the shader pipeline based on all the configuration above.
     let pipeline = renderer.pipeline(program, blend_mode, primitive, msaa_samples, vec![target]);
-    let clear_color = renderer.clear_color(0., 0., 0., 1.);
+    let clear_color = Renderer::clear_color(0., 0., 0., 1.);
 
     // Set all the data that won't change per render. Quads are made of four x, y coordinates.
     renderer.set_attribute(&pipeline, A_POSITION, &[-0.1, -0.1, -0.1, 0.1, 0.1, -0.1, 0.1, 0.1]);
