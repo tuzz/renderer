@@ -11,15 +11,18 @@ enum FunctionCall {
     ResizeSwapChain { new_size: dpi::PhysicalSize<u32> },
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
     Attribute { location: usize, size: u32 },
+    Instanced,
     Texture { width: u32, height: u32, layers: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, copyable: bool, with_sampler: bool },
 }
 
 enum ReturnValue {
     AttributeRef(AttributeRef),
+    InstancedRef(InstancedRef),
     TextureRef(TextureRef),
 }
 
 pub struct AttributeRef(usize);
+pub struct InstancedRef(usize);
 pub struct TextureRef(usize);
 
 impl RenderThread {
@@ -30,8 +33,9 @@ impl RenderThread {
         let _thread = thread::spawn(move || {
             let renderer = crate::Renderer::new(&window);
 
-            let mut attributes = vec![];
-            let mut textures = vec![];
+            let mut attributes: Vec<crate::Attribute> = vec![];
+            let mut instanced: Vec<crate::Instanced> = vec![];
+            let mut textures: Vec<crate::Texture> = vec![];
 
             while let Ok(message) = fn_receiver.recv() {
                 match message {
@@ -44,6 +48,10 @@ impl RenderThread {
                     FunctionCall::Attribute { location, size } => {
                         attributes.push(renderer.attribute(location, size));
                         rv_sender.send(ReturnValue::AttributeRef(AttributeRef(attributes.len()))).unwrap();
+                    },
+                    FunctionCall::Instanced => {
+                        instanced.push(renderer.instanced());
+                        rv_sender.send(ReturnValue::InstancedRef(InstancedRef(instanced.len()))).unwrap();
                     },
                     FunctionCall::Texture { width, height, layers, filter_mode, format, renderable, copyable, with_sampler } => {
                         textures.push(renderer.texture(width, height, layers, filter_mode, format, renderable, copyable, with_sampler));
@@ -72,6 +80,14 @@ impl RenderThread {
 
         let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
         if let ReturnValue::AttributeRef(r) = return_value { r } else { unreachable!() }
+    }
+
+    pub fn instanced(&self) -> InstancedRef {
+        let function_call = FunctionCall::Instanced;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+
+        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
+        if let ReturnValue::InstancedRef(r) = return_value { r } else { unreachable!() }
     }
 
     pub fn texture(&self, width: u32, height: u32, layers: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, copyable: bool, with_sampler: bool) -> TextureRef {
