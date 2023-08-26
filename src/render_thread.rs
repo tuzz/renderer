@@ -12,6 +12,7 @@ enum FunctionCall {
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
     StartFrame,
     FinishFrame,
+    Flush,
     AdapterInfo,
     Attribute { location: usize, size: u32 },
     Instanced,
@@ -65,6 +66,9 @@ impl RenderThread {
                     },
                     FunctionCall::FinishFrame => {
                         let _: () = renderer.finish_frame();
+                    },
+                    FunctionCall::Flush => {
+                        let _: () = renderer.flush();
                     },
                     FunctionCall::AdapterInfo => {
                         rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
@@ -121,6 +125,11 @@ impl RenderThread {
 
     pub fn finish_frame(&self) {
         let function_call = FunctionCall::FinishFrame;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn flush(&self) {
+        let function_call = FunctionCall::Flush;
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
