@@ -236,10 +236,7 @@ impl RenderThread {
         if let ReturnValue::TextureRef(r) = return_value { r } else { unreachable!() }
     }
 
-    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: Vec<AttributeRef>, instances: Vec<InstancedRef>, uniforms: Vec<(UniformRef, Vis)>, textures: Vec<(TextureRef, Vis)>) -> ProgramRef {
-        let vert = vert.iter().copied().collect();
-        let frag = frag.iter().copied().collect();
-
+    pub fn program(&self, vert: Vec<u8>, frag: Vec<u8>, attributes: Vec<AttributeRef>, instances: Vec<InstancedRef>, uniforms: Vec<(UniformRef, Vis)>, textures: Vec<(TextureRef, Vis)>) -> ProgramRef {
         let function_call = FunctionCall::Program { vert, frag, attributes, instances, uniforms, textures };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
 
