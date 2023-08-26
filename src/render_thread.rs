@@ -14,19 +14,24 @@ enum FunctionCall {
     Instanced,
     Uniform,
     Texture { width: u32, height: u32, layers: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, copyable: bool, with_sampler: bool },
+    Program { vert: Vec<u8>, frag: Vec<u8>, attributes: Vec<AttributeRef>, instances: Vec<InstancedRef>, uniforms: Vec<(UniformRef, Vis)>, textures: Vec<(TextureRef, Vis)> },
 }
+
+type Vis = crate::Visibility;
 
 enum ReturnValue {
     AttributeRef(AttributeRef),
     InstancedRef(InstancedRef),
     UniformRef(UniformRef),
     TextureRef(TextureRef),
+    ProgramRef(ProgramRef),
 }
 
-pub struct AttributeRef(usize);
-pub struct InstancedRef(usize);
-pub struct UniformRef(usize);
-pub struct TextureRef(usize);
+#[derive(Clone, Copy)] pub struct AttributeRef(usize);
+#[derive(Clone, Copy)] pub struct InstancedRef(usize);
+#[derive(Clone, Copy)] pub struct UniformRef(usize);
+#[derive(Clone, Copy)] pub struct TextureRef(usize);
+#[derive(Clone, Copy)] pub struct ProgramRef(usize);
 
 impl RenderThread {
     pub fn new(window: sync::Arc<window::Window>) -> Self {
@@ -37,9 +42,10 @@ impl RenderThread {
             let renderer = crate::Renderer::new(&window);
 
             let mut attributes: Vec<crate::Attribute> = vec![];
-            let mut instanced: Vec<crate::Instanced> = vec![];
+            let mut instances: Vec<crate::Instanced> = vec![];
             let mut uniforms: Vec<crate::Uniform> = vec![];
             let mut textures: Vec<crate::Texture> = vec![];
+            let mut programs: Vec<crate::Program> = vec![];
 
             while let Ok(message) = fn_receiver.recv() {
                 match message {
@@ -54,8 +60,8 @@ impl RenderThread {
                         rv_sender.send(ReturnValue::AttributeRef(AttributeRef(attributes.len()))).unwrap();
                     },
                     FunctionCall::Instanced => {
-                        instanced.push(renderer.instanced());
-                        rv_sender.send(ReturnValue::InstancedRef(InstancedRef(instanced.len()))).unwrap();
+                        instances.push(renderer.instanced());
+                        rv_sender.send(ReturnValue::InstancedRef(InstancedRef(instances.len()))).unwrap();
                     },
                     FunctionCall::Uniform => {
                         uniforms.push(renderer.uniform());
@@ -64,6 +70,15 @@ impl RenderThread {
                     FunctionCall::Texture { width, height, layers, filter_mode, format, renderable, copyable, with_sampler } => {
                         textures.push(renderer.texture(width, height, layers, filter_mode, format, renderable, copyable, with_sampler));
                         rv_sender.send(ReturnValue::TextureRef(TextureRef(textures.len()))).unwrap();
+                    }
+                    FunctionCall::Program { vert, frag, attributes: a, instances: i, uniforms: u, textures: t } => {
+                        let attributes = a.into_iter().map(|r| attributes[r.0].clone()).collect::<Vec<_>>();
+                        let instances = i.into_iter().map(|r| instances[r.0].clone()).collect::<Vec<_>>();
+                        let uniforms = u.into_iter().map(|(r, v)| (uniforms[r.0].clone(), v)).collect::<Vec<_>>();
+                        let textures = t.into_iter().map(|(r, v)| (textures[r.0].clone(), v)).collect::<Vec<_>>();
+
+                        programs.push(renderer.program(&vert, &frag, attributes, instances, uniforms, textures));
+                        rv_sender.send(ReturnValue::ProgramRef(ProgramRef(programs.len()))).unwrap();
                     }
                 }
             }
@@ -112,6 +127,17 @@ impl RenderThread {
 
         let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
         if let ReturnValue::TextureRef(r) = return_value { r } else { unreachable!() }
+    }
+
+    pub fn program(&self, vert: &[u8], frag: &[u8], attributes: Vec<AttributeRef>, instances: Vec<InstancedRef>, uniforms: Vec<(UniformRef, Vis)>, textures: Vec<(TextureRef, Vis)>) -> ProgramRef {
+        let vert = vert.iter().copied().collect();
+        let frag = frag.iter().copied().collect();
+
+        let function_call = FunctionCall::Program { vert, frag, attributes, instances, uniforms, textures };
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+
+        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
+        if let ReturnValue::ProgramRef(r) = return_value { r } else { unreachable!() }
     }
 
     pub fn join(&mut self) {
