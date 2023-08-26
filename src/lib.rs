@@ -40,6 +40,9 @@ pub use video_recorder::*;
 pub use viewport::*;
 pub use visibility::*;
 
+#[cfg(feature="render_thread")] mod render_thread;
+#[cfg(feature="render_thread")] pub use render_thread::*;
+
 #[cfg(feature="shader_compilation")] mod compiler;
 #[cfg(feature="shader_compilation")] pub use compiler::*;
 

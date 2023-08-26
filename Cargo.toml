@@ -19,6 +19,7 @@ wgpu = { version = "*", features = ["spirv"] }
 winit = "*"
 
 [features]
+render_thread = ["crossbeam-channel"]
 shader_compilation = ["shaderc"]
 frame_to_png = ["png"]
 frame_compression = ["bincode", "chrono", "crossbeam-channel", "lzzzz", "num_cpus"]
