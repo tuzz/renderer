@@ -14,6 +14,7 @@ enum FunctionCall {
     FinishFrame,
     Flush,
     SetVsync { boolean: bool },
+    SetMsaaSamples { pipeline: PipelineRef, msaa_samples: u32 },
     AdapterInfo,
     Pipeline { program: ProgramRef, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<TargetRef> },
     Attribute { location: usize, size: u32 },
@@ -78,6 +79,9 @@ impl RenderThread {
                     },
                     FunctionCall::SetVsync { boolean } => {
                         let _: () = renderer.set_vsync(boolean);
+                    },
+                    FunctionCall::SetMsaaSamples { pipeline, msaa_samples } => {
+                        let _: () = renderer.set_msaa_samples(&pipelines[pipeline.0], msaa_samples);
                     },
                     FunctionCall::AdapterInfo => {
                         rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
@@ -156,6 +160,11 @@ impl RenderThread {
 
     pub fn set_vsync(&self, boolean: bool) {
         let function_call = FunctionCall::SetVsync { boolean };
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn set_msaa_samples(&self, pipeline: PipelineRef, msaa_samples: u32) {
+        let function_call = FunctionCall::SetMsaaSamples { pipeline, msaa_samples };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
