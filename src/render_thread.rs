@@ -17,6 +17,7 @@ enum FunctionCall {
     SetInstanced { pipeline: PipelineRef, index_tuple: (usize, usize), data: Vec<f32> },
     SetUniform { pipeline: PipelineRef, index_tuple: (usize, usize), data: Vec<f32> },
     SetTexture { pipeline: PipelineRef, index_tuple: (usize, usize), layers_data: Vec<Vec<u8>> },
+    SetPartOfTexture { pipeline: PipelineRef, index_tuple: (usize, usize), offset: (u32, u32, u32), size: (u32, u32), data: Vec<u8> },
     SetVsync { boolean: bool },
     SetMsaaSamples { pipeline: PipelineRef, msaa_samples: u32 },
     StartRecording {  pipelines: Vec<PipelineRef>, clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::VideoFrame) + Send> },
@@ -95,6 +96,9 @@ impl RenderThread {
                     FunctionCall::SetTexture { pipeline: r, index_tuple, layers_data } => {
                         let layers_data = layers_data.iter().map(|data| &data[..]).collect::<Vec<_>>();
                         let _: () = renderer.set_texture(&pipelines[r.0], index_tuple, &layers_data);
+                    },
+                    FunctionCall::SetPartOfTexture { pipeline: r, index_tuple, offset, size, data } => {
+                        let _: () = renderer.set_part_of_texture(&pipelines[r.0], index_tuple, offset, size, &data);
                     },
                     FunctionCall::SetVsync { boolean } => {
                         let _: () = renderer.set_vsync(boolean);
@@ -202,6 +206,11 @@ impl RenderThread {
 
     pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: PipelineRef, index_tuple: (usize, usize), layers_data: Vec<Vec<u8>>) {
         let function_call = FunctionCall::SetTexture { pipeline, index_tuple, layers_data };
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn set_part_of_texture(&self, pipeline: PipelineRef, index_tuple: (usize, usize), offset: (u32, u32, u32), size: (u32, u32), data: Vec<u8>) {
+        let function_call = FunctionCall::SetPartOfTexture { pipeline, index_tuple, offset, size, data };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
