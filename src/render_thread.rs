@@ -11,6 +11,7 @@ enum FunctionCall {
     ResizeSwapChain { new_size: dpi::PhysicalSize<u32> },
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
     StartFrame,
+    FinishFrame,
     AdapterInfo,
     Attribute { location: usize, size: u32 },
     Instanced,
@@ -61,6 +62,9 @@ impl RenderThread {
                     },
                     FunctionCall::StartFrame => {
                         rv_sender.send(ReturnValue::FrameStarted(renderer.start_frame())).unwrap();
+                    },
+                    FunctionCall::FinishFrame => {
+                        let _: () = renderer.finish_frame();
                     },
                     FunctionCall::AdapterInfo => {
                         rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
@@ -113,6 +117,11 @@ impl RenderThread {
 
         let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
         if let ReturnValue::FrameStarted(b) = return_value { b } else { unreachable!() }
+    }
+
+    pub fn finish_frame(&self) {
+        let function_call = FunctionCall::FinishFrame;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
