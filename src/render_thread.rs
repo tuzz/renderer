@@ -12,6 +12,7 @@ enum FunctionCall {
     ResizeSwapChain { new_size: dpi::PhysicalSize<u32> },
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
     Render { pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32) },
+    RenderTo { targets: Vec<TargetRef>, pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32) },
     StartFrame,
     FinishFrame,
     Flush,
@@ -82,6 +83,10 @@ impl RenderThread {
                     },
                     FunctionCall::Render { pipeline, clear_color, viewport, count } => {
                         let _: () = renderer.render(&pipelines[pipeline.0], clear_color, viewport, count);
+                    },
+                    FunctionCall::RenderTo { targets, pipeline, clear_color, viewport, count } => {
+                        let targets = targets.iter().map(|r| r.to_target(&textures)).collect::<Vec<_>>();
+                        let _: () = renderer.render_to(&targets, &pipelines[pipeline.0], clear_color, viewport, count);
                     },
                     FunctionCall::StartFrame => {
                         rv_sender.send(ReturnValue::FrameStarted(renderer.start_frame())).unwrap();
@@ -189,6 +194,11 @@ impl RenderThread {
 
     pub fn render(&self, pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32)) {
         let function_call = FunctionCall::Render { pipeline, clear_color, viewport, count };
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn render_to(&self, targets: Vec<TargetRef>, pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32)) {
+        let function_call = FunctionCall::RenderTo { targets, pipeline, clear_color, viewport, count };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
