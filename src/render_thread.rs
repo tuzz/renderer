@@ -16,6 +16,7 @@ enum FunctionCall {
     SetVsync { boolean: bool },
     SetMsaaSamples { pipeline: PipelineRef, msaa_samples: u32 },
     StartRecording {  pipelines: Vec<PipelineRef>, clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::VideoFrame) + Send> },
+    StopRecording {  pipelines: Vec<PipelineRef> },
     AdapterInfo,
     Pipeline { program: ProgramRef, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<TargetRef> },
     Attribute { location: usize, size: u32 },
@@ -87,6 +88,10 @@ impl RenderThread {
                     FunctionCall::StartRecording { pipelines: p, clear_color, max_buffer_size_in_megabytes, process_function } => {
                         let pipelines = p.iter().map(|r| &pipelines[r.0]).collect::<Vec<_>>();
                         let _: () = renderer.start_recording(&pipelines, clear_color, max_buffer_size_in_megabytes, process_function);
+                    },
+                    FunctionCall::StopRecording { pipelines: p } => {
+                        let pipelines = p.iter().map(|r| &pipelines[r.0]).collect::<Vec<_>>();
+                        let _: () = renderer.stop_recording(&pipelines);
                     },
                     FunctionCall::AdapterInfo => {
                         rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
@@ -175,6 +180,11 @@ impl RenderThread {
 
     pub fn start_recording(&self, pipelines: Vec<PipelineRef>, clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::VideoFrame) + Send>) {
         let function_call = FunctionCall::StartRecording { pipelines, clear_color, max_buffer_size_in_megabytes, process_function };
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn stop_recording(&self, pipelines: Vec<PipelineRef>) {
+        let function_call = FunctionCall::StopRecording { pipelines };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
