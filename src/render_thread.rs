@@ -10,6 +10,7 @@ pub struct RenderThread {
 enum FunctionCall {
     ResizeSwapChain { new_size: dpi::PhysicalSize<u32> },
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
+    StartFrame,
     AdapterInfo,
     Attribute { location: usize, size: u32 },
     Instanced,
@@ -21,6 +22,7 @@ enum FunctionCall {
 type Vis = crate::Visibility;
 
 enum ReturnValue {
+    FrameStarted(bool),
     AdapterInfo(wgpu::AdapterInfo),
     AttributeRef(AttributeRef),
     InstancedRef(InstancedRef),
@@ -56,6 +58,9 @@ impl RenderThread {
                     }
                     FunctionCall::ResizeTexture { texture, new_size } => {
                         let _: () = renderer.resize_texture(&mut textures[texture.0], new_size);
+                    },
+                    FunctionCall::StartFrame => {
+                        rv_sender.send(ReturnValue::FrameStarted(renderer.start_frame())).unwrap();
                     },
                     FunctionCall::AdapterInfo => {
                         rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
@@ -100,6 +105,14 @@ impl RenderThread {
     pub fn resize_texture(&self, texture: TextureRef, new_size: (u32, u32, u32)) {
         let function_call = FunctionCall::ResizeTexture { texture, new_size };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn start_frame(&self) -> bool {
+        let function_call = FunctionCall::StartFrame;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+
+        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
+        if let ReturnValue::FrameStarted(b) = return_value { b } else { unreachable!() }
     }
 
     pub fn adapter_info(&self) -> wgpu::AdapterInfo {
