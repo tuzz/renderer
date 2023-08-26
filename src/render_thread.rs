@@ -5,6 +5,7 @@ pub struct RenderThread {
     fn_sender: Option<crossbeam_channel::Sender<FunctionCall>>,
     rv_receiver: Option<crossbeam_channel::Receiver<ReturnValue>>,
     _thread: thread::JoinHandle<()>,
+    window_size: dpi::PhysicalSize<u32>,
 }
 
 enum FunctionCall {
@@ -34,6 +35,7 @@ enum FunctionCall {
 type Vis = crate::Visibility;
 
 enum ReturnValue {
+    WindowSize(dpi::PhysicalSize<u32>),
     FrameStarted(bool),
     AdapterInfo(wgpu::AdapterInfo),
     PipelineRef(PipelineRef),
@@ -59,6 +61,8 @@ impl RenderThread {
 
         let _thread = thread::spawn(move || {
             let renderer = crate::Renderer::new(&window);
+
+            rv_sender.send(ReturnValue::WindowSize(renderer.window_size)).unwrap();
 
             let mut pipelines: Vec<crate::Pipeline> = vec![];
             let mut attributes: Vec<crate::Attribute> = vec![];
@@ -153,7 +157,10 @@ impl RenderThread {
             }
         });
 
-        Self { fn_sender: Some(fn_sender), rv_receiver: Some(rv_receiver), _thread }
+        // Store and maintain a local copy of window size to avoid having to block the thread.
+        let window_size = if let ReturnValue::WindowSize(s) = rv_receiver.recv().unwrap() { s } else { unreachable!() };
+
+        Self { fn_sender: Some(fn_sender), rv_receiver: Some(rv_receiver), _thread, window_size }
     }
 
     pub fn join(&mut self) {
@@ -161,9 +168,14 @@ impl RenderThread {
         self.rv_receiver.take();
     }
 
-    pub fn resize_swap_chain(&self, new_size: &dpi::PhysicalSize<u32>) {
+    pub fn window_size(&self) -> dpi::PhysicalSize<u32> {
+        self.window_size
+    }
+
+    pub fn resize_swap_chain(&mut self, new_size: &dpi::PhysicalSize<u32>) {
         let function_call = FunctionCall::ResizeSwapChain { new_size: *new_size };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+        self.window_size = *new_size;
     }
 
     pub fn resize_texture(&self, texture: TextureRef, new_size: (u32, u32, u32)) {
