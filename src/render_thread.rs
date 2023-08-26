@@ -39,6 +39,7 @@ enum ReturnValue {
 #[derive(Clone, Copy)] pub struct UniformRef(usize);
 #[derive(Clone, Copy)] pub struct TextureRef(usize);
 #[derive(Clone, Copy)] pub struct ProgramRef(usize);
+#[derive(Clone, Copy)] pub enum TargetRef { Screen, TextureRef(TextureRef) }
 
 impl RenderThread {
     pub fn new(window: sync::Arc<window::Window>) -> Self {
@@ -191,6 +192,14 @@ impl RenderThread {
 
         let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
         if let ReturnValue::ProgramRef(r) = return_value { r } else { unreachable!() }
+    }
+
+    pub fn screen_target(&self) -> TargetRef {
+        TargetRef::Screen
+    }
+
+    pub fn texture_target(texture: TextureRef) -> TargetRef {
+        TargetRef::TextureRef(texture)
     }
 
     pub fn join(&mut self) {
