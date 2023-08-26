@@ -13,6 +13,7 @@ enum FunctionCall {
     StartFrame,
     FinishFrame,
     Flush,
+    SetVsync { boolean: bool },
     AdapterInfo,
     Attribute { location: usize, size: u32 },
     Instanced,
@@ -69,6 +70,9 @@ impl RenderThread {
                     },
                     FunctionCall::Flush => {
                         let _: () = renderer.flush();
+                    },
+                    FunctionCall::SetVsync { boolean } => {
+                        let _: () = renderer.set_vsync(boolean);
                     },
                     FunctionCall::AdapterInfo => {
                         rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
@@ -130,6 +134,11 @@ impl RenderThread {
 
     pub fn flush(&self) {
         let function_call = FunctionCall::Flush;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn set_vsync(&self, boolean: bool) {
+        let function_call = FunctionCall::SetVsync { boolean };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
