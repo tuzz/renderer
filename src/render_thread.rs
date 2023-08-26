@@ -12,17 +12,20 @@ enum FunctionCall {
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
     Attribute { location: usize, size: u32 },
     Instanced,
+    Uniform,
     Texture { width: u32, height: u32, layers: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, copyable: bool, with_sampler: bool },
 }
 
 enum ReturnValue {
     AttributeRef(AttributeRef),
     InstancedRef(InstancedRef),
+    UniformRef(UniformRef),
     TextureRef(TextureRef),
 }
 
 pub struct AttributeRef(usize);
 pub struct InstancedRef(usize);
+pub struct UniformRef(usize);
 pub struct TextureRef(usize);
 
 impl RenderThread {
@@ -35,6 +38,7 @@ impl RenderThread {
 
             let mut attributes: Vec<crate::Attribute> = vec![];
             let mut instanced: Vec<crate::Instanced> = vec![];
+            let mut uniforms: Vec<crate::Uniform> = vec![];
             let mut textures: Vec<crate::Texture> = vec![];
 
             while let Ok(message) = fn_receiver.recv() {
@@ -52,6 +56,10 @@ impl RenderThread {
                     FunctionCall::Instanced => {
                         instanced.push(renderer.instanced());
                         rv_sender.send(ReturnValue::InstancedRef(InstancedRef(instanced.len()))).unwrap();
+                    },
+                    FunctionCall::Uniform => {
+                        uniforms.push(renderer.uniform());
+                        rv_sender.send(ReturnValue::UniformRef(UniformRef(uniforms.len()))).unwrap();
                     },
                     FunctionCall::Texture { width, height, layers, filter_mode, format, renderable, copyable, with_sampler } => {
                         textures.push(renderer.texture(width, height, layers, filter_mode, format, renderable, copyable, with_sampler));
@@ -88,6 +96,14 @@ impl RenderThread {
 
         let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
         if let ReturnValue::InstancedRef(r) = return_value { r } else { unreachable!() }
+    }
+
+    pub fn uniform(&self) -> UniformRef {
+        let function_call = FunctionCall::Uniform;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+
+        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
+        if let ReturnValue::UniformRef(r) = return_value { r } else { unreachable!() }
     }
 
     pub fn texture(&self, width: u32, height: u32, layers: u32, filter_mode: crate::FilterMode, format: crate::Format, renderable: bool, copyable: bool, with_sampler: bool) -> TextureRef {
