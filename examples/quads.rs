@@ -143,7 +143,7 @@ fn main() {
                 let viewport = renderer.viewport(1., 1.); // e.g. (16., 9.)
 
                 // Render two instances, each comprised of four vertices.
-                renderer.render(&pipeline, Some(clear_color), Some(&viewport), (2, 4));
+                renderer.render(&pipeline, Some(clear_color), Some(viewport), (2, 4));
                 renderer.finish_frame();
             },
             event::Event::MainEventsCleared => {
