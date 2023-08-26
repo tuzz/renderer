@@ -10,6 +10,7 @@ pub struct RenderThread {
 enum FunctionCall {
     ResizeSwapChain { new_size: dpi::PhysicalSize<u32> },
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
+    AdapterInfo,
     Attribute { location: usize, size: u32 },
     Instanced,
     Uniform,
@@ -20,6 +21,7 @@ enum FunctionCall {
 type Vis = crate::Visibility;
 
 enum ReturnValue {
+    AdapterInfo(wgpu::AdapterInfo),
     AttributeRef(AttributeRef),
     InstancedRef(InstancedRef),
     UniformRef(UniformRef),
@@ -54,6 +56,9 @@ impl RenderThread {
                     }
                     FunctionCall::ResizeTexture { texture, new_size } => {
                         let _: () = renderer.resize_texture(&mut textures[texture.0], new_size);
+                    },
+                    FunctionCall::AdapterInfo => {
+                        rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
                     },
                     FunctionCall::Attribute { location, size } => {
                         attributes.push(renderer.attribute(location, size));
@@ -95,6 +100,14 @@ impl RenderThread {
     pub fn resize_texture(&self, texture: TextureRef, new_size: (u32, u32, u32)) {
         let function_call = FunctionCall::ResizeTexture { texture, new_size };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn adapter_info(&self) -> wgpu::AdapterInfo {
+        let function_call = FunctionCall::AdapterInfo;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+
+        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
+        if let ReturnValue::AdapterInfo(i) = return_value { i } else { unreachable!() }
     }
 
     pub fn attribute(&self, location: usize, size: u32) -> AttributeRef {
