@@ -37,7 +37,6 @@ enum FunctionCall {
 type Vis = crate::Visibility;
 
 enum ReturnValue {
-    WindowSize(dpi::PhysicalSize<u32>),
     FrameStarted(bool),
     AdapterInfo(wgpu::AdapterInfo),
     PipelineRef(PipelineRef),
@@ -58,13 +57,13 @@ enum ReturnValue {
 
 impl RenderThread {
     pub fn new(window: sync::Arc<window::Window>) -> Self {
+        let window_size = window.inner_size();
+
         let (fn_sender, fn_receiver) = crossbeam_channel::unbounded::<FunctionCall>();
         let (rv_sender, rv_receiver) = crossbeam_channel::bounded::<ReturnValue>(1);
 
         let _thread = thread::spawn(move || {
             let renderer = crate::Renderer::new(&window);
-
-            rv_sender.send(ReturnValue::WindowSize(renderer.window_size)).unwrap();
 
             let mut pipelines: Vec<crate::Pipeline> = vec![];
             let mut attributes: Vec<crate::Attribute> = vec![];
@@ -165,9 +164,6 @@ impl RenderThread {
                 }
             }
         });
-
-        // Store and maintain a local copy of window size to avoid having to block the thread.
-        let window_size = if let ReturnValue::WindowSize(s) = rv_receiver.recv().unwrap() { s } else { unreachable!() };
 
         Self { fn_sender: Some(fn_sender), rv_receiver: Some(rv_receiver), _thread, window_size }
     }
