@@ -15,6 +15,7 @@ enum FunctionCall {
     Flush,
     SetVsync { boolean: bool },
     AdapterInfo,
+    Pipeline { program: ProgramRef, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<TargetRef> },
     Attribute { location: usize, size: u32 },
     Instanced,
     Uniform,
@@ -27,6 +28,7 @@ type Vis = crate::Visibility;
 enum ReturnValue {
     FrameStarted(bool),
     AdapterInfo(wgpu::AdapterInfo),
+    PipelineRef(PipelineRef),
     AttributeRef(AttributeRef),
     InstancedRef(InstancedRef),
     UniformRef(UniformRef),
@@ -34,6 +36,7 @@ enum ReturnValue {
     ProgramRef(ProgramRef),
 }
 
+#[derive(Clone, Copy)] pub struct PipelineRef(usize);
 #[derive(Clone, Copy)] pub struct AttributeRef(usize);
 #[derive(Clone, Copy)] pub struct InstancedRef(usize);
 #[derive(Clone, Copy)] pub struct UniformRef(usize);
@@ -49,6 +52,7 @@ impl RenderThread {
         let _thread = thread::spawn(move || {
             let renderer = crate::Renderer::new(&window);
 
+            let mut pipelines: Vec<crate::Pipeline> = vec![];
             let mut attributes: Vec<crate::Attribute> = vec![];
             let mut instances: Vec<crate::Instanced> = vec![];
             let mut uniforms: Vec<crate::Uniform> = vec![];
@@ -77,6 +81,13 @@ impl RenderThread {
                     },
                     FunctionCall::AdapterInfo => {
                         rv_sender.send(ReturnValue::AdapterInfo(renderer.adapter_info())).unwrap();
+                    },
+                    FunctionCall::Pipeline { program, blend_mode, primitive, msaa_samples, targets } => {
+                        let program = programs[program.0].clone();
+                        let targets = targets.iter().map(|r| r.to_target(&textures)).collect();
+
+                        pipelines.push(renderer.pipeline(program, blend_mode, primitive, msaa_samples, targets));
+                        rv_sender.send(ReturnValue::PipelineRef(PipelineRef(pipelines.len()))).unwrap();
                     },
                     FunctionCall::Attribute { location, size } => {
                         attributes.push(renderer.attribute(location, size));
@@ -108,6 +119,11 @@ impl RenderThread {
         });
 
         Self { fn_sender: Some(fn_sender), rv_receiver: Some(rv_receiver), _thread }
+    }
+
+    pub fn join(&mut self) {
+        self.fn_sender.take();
+        self.rv_receiver.take();
     }
 
     pub fn resize_swap_chain(&self, new_size: &dpi::PhysicalSize<u32>) {
@@ -149,6 +165,14 @@ impl RenderThread {
 
         let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
         if let ReturnValue::AdapterInfo(i) = return_value { i } else { unreachable!() }
+    }
+
+    pub fn pipeline(&self, program: ProgramRef, blend_mode: crate::BlendMode, primitive: crate::Primitive, msaa_samples: u32, targets: Vec<TargetRef>) -> PipelineRef {
+        let function_call = FunctionCall::Pipeline { program, blend_mode, primitive, msaa_samples, targets };
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+
+        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
+        if let ReturnValue::PipelineRef(r) = return_value { r } else { unreachable!() }
     }
 
     pub fn attribute(&self, location: usize, size: u32) -> AttributeRef {
@@ -194,6 +218,8 @@ impl RenderThread {
         if let ReturnValue::ProgramRef(r) = return_value { r } else { unreachable!() }
     }
 
+    // TODO: viewport
+
     pub fn screen_target(&self) -> TargetRef {
         TargetRef::Screen
     }
@@ -201,9 +227,13 @@ impl RenderThread {
     pub fn texture_target(texture: TextureRef) -> TargetRef {
         TargetRef::TextureRef(texture)
     }
+}
 
-    pub fn join(&mut self) {
-        self.fn_sender.take();
-        self.rv_receiver.take();
+impl TargetRef {
+    pub fn to_target(&self, textures: &[crate::Texture]) -> crate::Target {
+        match self {
+            Self::Screen => crate::Target::Screen,
+            Self::TextureRef(r) => crate::Target::Texture(textures[r.0].clone()),
+        }
     }
 }
