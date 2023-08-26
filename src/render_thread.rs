@@ -16,6 +16,7 @@ enum FunctionCall {
     SetAttribute { pipeline: PipelineRef, location: usize, data: Vec<f32> },
     SetInstanced { pipeline: PipelineRef, index_tuple: (usize, usize), data: Vec<f32> },
     SetUniform { pipeline: PipelineRef, index_tuple: (usize, usize), data: Vec<f32> },
+    SetTexture { pipeline: PipelineRef, index_tuple: (usize, usize), layers_data: Vec<Vec<u8>> },
     SetVsync { boolean: bool },
     SetMsaaSamples { pipeline: PipelineRef, msaa_samples: u32 },
     StartRecording {  pipelines: Vec<PipelineRef>, clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::VideoFrame) + Send> },
@@ -90,6 +91,10 @@ impl RenderThread {
                     },
                     FunctionCall::SetUniform { pipeline: r, index_tuple, data } => {
                         let _: () = renderer.set_uniform(&pipelines[r.0], index_tuple, &data);
+                    },
+                    FunctionCall::SetTexture { pipeline: r, index_tuple, layers_data } => {
+                        let layers_data = layers_data.iter().map(|data| &data[..]).collect::<Vec<_>>();
+                        let _: () = renderer.set_texture(&pipelines[r.0], index_tuple, &layers_data);
                     },
                     FunctionCall::SetVsync { boolean } => {
                         let _: () = renderer.set_vsync(boolean);
@@ -192,6 +197,11 @@ impl RenderThread {
 
     pub fn set_uniform(&self, pipeline: PipelineRef, index_tuple: (usize, usize), data: Vec<f32>) {
         let function_call = FunctionCall::SetUniform { pipeline, index_tuple, data };
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: PipelineRef, index_tuple: (usize, usize), layers_data: Vec<Vec<u8>>) {
+        let function_call = FunctionCall::SetTexture { pipeline, index_tuple, layers_data };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
