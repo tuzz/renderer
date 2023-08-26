@@ -13,6 +13,7 @@ enum FunctionCall {
     StartFrame,
     FinishFrame,
     Flush,
+    SetAttribute { pipeline: PipelineRef, location: usize, data: Vec<f32> },
     SetVsync { boolean: bool },
     SetMsaaSamples { pipeline: PipelineRef, msaa_samples: u32 },
     StartRecording {  pipelines: Vec<PipelineRef>, clear_color: Option<crate::ClearColor>, max_buffer_size_in_megabytes: f32, process_function: Box<dyn FnMut(crate::VideoFrame) + Send> },
@@ -78,6 +79,9 @@ impl RenderThread {
                     },
                     FunctionCall::Flush => {
                         let _: () = renderer.flush();
+                    },
+                    FunctionCall::SetAttribute { pipeline: r, location, data } => {
+                        let _: () = renderer.set_attribute(&pipelines[r.0], location, &data);
                     },
                     FunctionCall::SetVsync { boolean } => {
                         let _: () = renderer.set_vsync(boolean);
@@ -165,6 +169,11 @@ impl RenderThread {
 
     pub fn flush(&self) {
         let function_call = FunctionCall::Flush;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+    }
+
+    pub fn set_attribute(&self, pipeline: PipelineRef, location: usize, data: Vec<f32>) {
+        let function_call = FunctionCall::SetAttribute { pipeline, location, data };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
