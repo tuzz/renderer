@@ -302,7 +302,9 @@ impl RenderThread {
         if let ReturnValue::ProgramRef(r) = return_value { r } else { unreachable!() }
     }
 
-    // TODO: viewport
+    pub fn viewport(&self, aspect_x: f32, aspect_y: f32) -> crate::Viewport {
+        crate::Viewport::new(aspect_x, aspect_y, self.window_size.width as f32, self.window_size.height as f32)
+    }
 
     pub fn screen_target(&self) -> TargetRef {
         TargetRef::Screen
