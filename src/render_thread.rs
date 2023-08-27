@@ -83,11 +83,11 @@ impl RenderThread {
                         let _: () = renderer.resize_texture(&mut textures[texture.0], new_size);
                     },
                     FunctionCall::Render { pipeline, clear_color, viewport, count } => {
-                        let _: () = renderer.render(&pipelines[pipeline.0], clear_color, viewport, count);
+                        let _: () = renderer.render(&pipelines[pipeline.0], clear_color, viewport.as_ref(), count);
                     },
                     FunctionCall::RenderTo { targets, pipeline, clear_color, viewport, count } => {
                         let targets = targets.iter().map(|r| r.to_target(&textures)).collect::<Vec<_>>();
-                        let _: () = renderer.render_to(&targets, &pipelines[pipeline.0], clear_color, viewport, count);
+                        let _: () = renderer.render_to(&targets, &pipelines[pipeline.0], clear_color, viewport.as_ref(), count);
                     },
                     FunctionCall::StartFrame => {
                         rv_sender.send(ReturnValue::FrameStarted(renderer.start_frame())).unwrap();

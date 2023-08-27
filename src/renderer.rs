@@ -70,14 +70,14 @@ impl Renderer {
         texture.resize(&self.device, new_size);
     }
 
-    pub fn render(&self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32)) {
+    pub fn render(&self, pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
         self.render_to(&pipeline.targets, pipeline, clear_color, viewport, count);
     }
 
     // You can render to different targets than those specified when setting up
     // the pipeline but it will crash if the texture formats are different.
 
-    pub fn render_to(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32)) {
+    pub fn render_to(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
         let targets = targets.iter().filter(|t| {
             if let crate::Target::Screen = t {
                 self.start_frame()
@@ -87,7 +87,7 @@ impl Renderer {
         }).collect::<Vec<_>>();
 
         let render_pass = crate::RenderPass::new(&self);
-        let cbuffer = render_pass.render(&targets, pipeline, &clear_color, viewport.as_ref(), count);
+        let cbuffer = render_pass.render(&targets, pipeline, &clear_color, viewport, count);
 
         self.inner.borrow_mut().commands.push(cbuffer);
     }
