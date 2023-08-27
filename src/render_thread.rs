@@ -62,8 +62,10 @@ impl RenderThread {
         let (fn_sender, fn_receiver) = crossbeam_channel::unbounded::<FunctionCall>();
         let (rv_sender, rv_receiver) = crossbeam_channel::bounded::<ReturnValue>(1);
 
+        let (instance, surface) = crate::Renderer::create_surface(&window);
+
         let _thread = thread::spawn(move || {
-            let renderer = crate::Renderer::new(&window);
+            let renderer = crate::Renderer::new_with_surface(&window, instance, surface);
 
             let mut pipelines: Vec<crate::Pipeline> = vec![];
             let mut attributes: Vec<crate::Attribute> = vec![];

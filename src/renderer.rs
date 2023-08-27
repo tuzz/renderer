@@ -25,9 +25,19 @@ pub struct InnerR {
 
 impl Renderer {
     pub fn new(window: &window::Window) -> Self {
-        let window_size = window.inner_size();
+        let (instance, surface) = Self::create_surface(window);
+        Self::new_with_surface(window, instance, surface)
+    }
+
+    pub fn create_surface(window: &window::Window) -> (wgpu::Instance, wgpu::Surface) {
         let instance = get_instance();
-        let surface = unsafe { instance.create_surface(window).unwrap() };
+        let surface = unsafe { instance.create_surface(window).unwrap() }; // Must be called in main thread.
+
+        (instance, surface)
+    }
+
+    pub fn new_with_surface(window: &window::Window, instance: wgpu::Instance, surface: wgpu::Surface) -> Self {
+        let window_size = window.inner_size();
         let adapter = get_adapter(&instance, &surface);
         let (device, queue) = get_device(&adapter);
         let vsync = true;
