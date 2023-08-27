@@ -231,7 +231,7 @@ impl RenderThread {
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
 
-    pub fn set_texture<T: bytemuck::Pod>(&self, pipeline: PipelineRef, index_tuple: (usize, usize), layers_data: Vec<Vec<u8>>) {
+    pub fn set_texture(&self, pipeline: PipelineRef, index_tuple: (usize, usize), layers_data: Vec<Vec<u8>>) {
         let function_call = FunctionCall::SetTexture { pipeline, index_tuple, layers_data };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
     }
@@ -321,7 +321,7 @@ impl RenderThread {
         crate::Viewport::new(aspect_x, aspect_y, self.window_size.width as f32, self.window_size.height as f32)
     }
 
-    pub fn screen_target(&self) -> TargetRef {
+    pub fn screen_target() -> TargetRef {
         TargetRef::Screen
     }
 
