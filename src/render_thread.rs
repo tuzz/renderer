@@ -136,23 +136,23 @@ impl RenderThread {
                         let targets = targets.iter().map(|r| r.to_target(&textures)).collect();
 
                         pipelines.push(renderer.pipeline(program, blend_mode, primitive, msaa_samples, targets));
-                        rv_sender.send(ReturnValue::PipelineRef(PipelineRef(pipelines.len()))).unwrap();
+                        rv_sender.send(ReturnValue::PipelineRef(PipelineRef(pipelines.len() - 1))).unwrap();
                     },
                     FunctionCall::Attribute { location, size } => {
                         attributes.push(renderer.attribute(location, size));
-                        rv_sender.send(ReturnValue::AttributeRef(AttributeRef(attributes.len()))).unwrap();
+                        rv_sender.send(ReturnValue::AttributeRef(AttributeRef(attributes.len() - 1))).unwrap();
                     },
                     FunctionCall::Instanced => {
                         instances.push(renderer.instanced());
-                        rv_sender.send(ReturnValue::InstancedRef(InstancedRef(instances.len()))).unwrap();
+                        rv_sender.send(ReturnValue::InstancedRef(InstancedRef(instances.len() - 1))).unwrap();
                     },
                     FunctionCall::Uniform => {
                         uniforms.push(renderer.uniform());
-                        rv_sender.send(ReturnValue::UniformRef(UniformRef(uniforms.len()))).unwrap();
+                        rv_sender.send(ReturnValue::UniformRef(UniformRef(uniforms.len() - 1))).unwrap();
                     },
                     FunctionCall::Texture { width, height, layers, filter_mode, format, renderable, copyable, with_sampler } => {
                         textures.push(renderer.texture(width, height, layers, filter_mode, format, renderable, copyable, with_sampler));
-                        rv_sender.send(ReturnValue::TextureRef(TextureRef(textures.len()))).unwrap();
+                        rv_sender.send(ReturnValue::TextureRef(TextureRef(textures.len() - 1))).unwrap();
                     }
                     FunctionCall::Program { vert, frag, attributes: a, instances: i, uniforms: u, textures: t } => {
                         let attributes = a.into_iter().map(|r| attributes[r.0].clone()).collect::<Vec<_>>();
@@ -161,7 +161,7 @@ impl RenderThread {
                         let textures = t.into_iter().map(|(r, v)| (textures[r.0].clone(), v)).collect::<Vec<_>>();
 
                         programs.push(renderer.program(&vert, &frag, attributes, instances, uniforms, textures));
-                        rv_sender.send(ReturnValue::ProgramRef(ProgramRef(programs.len()))).unwrap();
+                        rv_sender.send(ReturnValue::ProgramRef(ProgramRef(programs.len() - 1))).unwrap();
                     }
                 }
             }
