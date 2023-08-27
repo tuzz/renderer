@@ -136,6 +136,9 @@ fn main() {
                 x2.0 += x2.1; if x2.0 > 0.9 || x2.0 < -0.9 { x2.1 *= -1.; }
                 y2.0 += y2.1; if y2.0 > 0.9 || y2.0 < -0.9 { y2.1 *= -1.; }
 
+                // Ensure all of the RenderThread function calls for the last frame are done.
+                renderer.synchronize();
+
                 // Update the quad positions that _do_ change per render.
                 renderer.set_instanced(pipeline, I_OFFSET, vec![x1.0, y1.0, x2.0, y2.0]);
 

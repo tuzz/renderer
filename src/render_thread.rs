@@ -9,6 +9,7 @@ pub struct RenderThread {
 }
 
 enum FunctionCall {
+    Synchronize,
     ResizeSwapChain { new_size: dpi::PhysicalSize<u32> },
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
     Render { pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32) },
@@ -36,6 +37,7 @@ enum FunctionCall {
 type Vis = crate::Visibility;
 
 enum ReturnValue {
+    Synchronized,
     AdapterInfo(wgpu::AdapterInfo),
     PipelineRef(PipelineRef),
     AttributeRef(AttributeRef),
@@ -74,6 +76,9 @@ impl RenderThread {
 
             while let Ok(message) = fn_receiver.recv() {
                 match message {
+                    FunctionCall::Synchronize => {
+                        rv_sender.send(ReturnValue::Synchronized).unwrap();
+                    }
                     FunctionCall::ResizeSwapChain { new_size } => {
                         let _: () = renderer.resize_swap_chain(&new_size);
                     }
@@ -168,6 +173,14 @@ impl RenderThread {
     pub fn join(&mut self) {
         self.fn_sender.take();
         self.rv_receiver.take();
+    }
+
+    pub fn synchronize(&self) {
+        let function_call = FunctionCall::Synchronize;
+        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
+
+        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
+        if let ReturnValue::Synchronized = return_value { } else { unreachable!() }
     }
 
     pub fn window_size(&self) -> dpi::PhysicalSize<u32> {
