@@ -6,8 +6,16 @@ vertex/fragment shader pipeline. The [quads example](./examples/quads.rs) shows
 how to use the crate. You can run it with:
 
 ```sh
-$ cargo run --release --example quads --all-features
+$ cargo run --release --all-features --example quads_main_thread
 ```
+
+Alternatively, you can run the same example in a background thread:
+
+```sh
+$ cargo run --release --all-features --example quads_render_thread
+```
+
+## Background
 
 This crate is based on the first part of
 [this](https://sotrh.github.io/learn-wgpu) excellent tutorial and tries to
