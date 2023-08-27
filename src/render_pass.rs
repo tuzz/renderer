@@ -10,7 +10,7 @@ impl<'a> RenderPass<'a> {
         Self { renderer }
     }
 
-    pub fn render(&self, targets: &[&crate::Target], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
+    pub fn render(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear: &Clear, viewport: View, count: (u32, u32)) -> wgpu::CommandBuffer {
         let window_size = self.window_size();
         let size = (window_size.0, window_size.1, 1);
 
@@ -57,7 +57,7 @@ impl<'a> RenderPass<'a> {
         (self.renderer.window_size.width, self.renderer.window_size.height)
     }
 
-    fn color_attachments(&self, targets: &'a [&crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<Option<wgpu::RenderPassColorAttachment<'a>>> {
+    fn color_attachments(&self, targets: &'a [crate::Target], pipeline: &'a crate::Pipeline, clear: &Clear) -> Vec<Option<wgpu::RenderPassColorAttachment<'a>>> {
         let mut attachments = targets.iter().map(|t| Some(self.color_attachment(t.view(&self.renderer), pipeline, clear))).collect::<Vec<_>>();
 
         match pipeline.position_in_recording {

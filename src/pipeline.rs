@@ -41,7 +41,7 @@ impl Pipeline {
         Self { inner: cell::RefCell::new(inner) }
     }
 
-    pub fn recreate_on_buffer_or_texture_resize(&self, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
+    pub fn recreate_on_buffer_or_texture_resize(&self, device: &wgpu::Device, window_size: (u32, u32), targets: &[crate::Target]) {
         resize_msaa_texture(&self, device, window_size, targets);
 
         let actual = self.program.latest_generations();
@@ -175,7 +175,7 @@ fn create_msaa_texture(device: &wgpu::Device, window_size: (u32, u32), targets: 
     crate::Texture::new(device, size, filter_mode, format, msaa_samples, renderable, copyable, with_sampler)
 }
 
-fn resize_msaa_texture(pipeline: &Pipeline, device: &wgpu::Device, window_size: (u32, u32), targets: &[&crate::Target]) {
+fn resize_msaa_texture(pipeline: &Pipeline, device: &wgpu::Device, window_size: (u32, u32), targets: &[crate::Target]) {
     let target = &targets[0];
     let new_size = target.size(window_size);
 

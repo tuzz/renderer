@@ -78,32 +78,26 @@ impl Renderer {
     // the pipeline but it will crash if the texture formats are different.
 
     pub fn render_to(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
-        let targets = targets.iter().filter(|t| {
-            if let crate::Target::Screen = t {
+        for target in targets {
+            if let crate::Target::Screen = target {
                 self._start_frame()
-            } else {
-                true
             }
-        }).collect::<Vec<_>>();
+        }
 
         let render_pass = crate::RenderPass::new(&self);
-        let cbuffer = render_pass.render(&targets, pipeline, &clear_color, viewport, count);
+        let cbuffer = render_pass.render(targets, pipeline, &clear_color, viewport, count);
 
         self.inner.borrow_mut().commands.push(cbuffer);
     }
 
-    fn _start_frame(&self) -> bool {
-        if self.frame.is_some() { return true; }
+    fn _start_frame(&self) {
+        if self.frame.is_some() { return; }
 
         let mut inner = self.inner.borrow_mut();
+        let frame = inner.surface.get_current_texture().unwrap();
 
-        if let Ok(frame) = inner.surface.get_current_texture() {
-            inner.frame_view = Some(frame.texture.create_view(&wgpu::TextureViewDescriptor::default()));
-            inner.frame = Some(frame);
-            true
-        } else {
-            false
-        }
+        inner.frame_view = Some(frame.texture.create_view(&wgpu::TextureViewDescriptor::default()));
+        inner.frame = Some(frame);
     }
 
     pub fn finish_frame(&self) {
