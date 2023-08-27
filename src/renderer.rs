@@ -105,14 +105,16 @@ impl Renderer {
 
         let mut inner = self.inner.borrow_mut();
 
-        inner.frame.take().unwrap().present();
-        inner.frame_view = None;
-
         if let Some(recorder) = &mut inner.recorder {
             recorder.initiate_buffer_mapping();
             recorder.process_mapped_buffers();
             recorder.finish_frame();
         }
+
+        if inner.frame.is_none() { return; }
+
+        inner.frame.take().unwrap().present();
+        inner.frame_view = None;
     }
 
     pub fn flush(&self) {
