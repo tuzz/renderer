@@ -1,4 +1,4 @@
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct BlendMode {
     pub src_factor: wgpu::BlendFactor,
     pub dst_factor: wgpu::BlendFactor,
