@@ -13,7 +13,6 @@ enum FunctionCall {
     ResizeTexture { texture: TextureRef, new_size: (u32, u32, u32) },
     Render { pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32) },
     RenderTo { targets: Vec<TargetRef>, pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32) },
-    StartFrame,
     FinishFrame,
     Flush,
     SetAttribute { pipeline: PipelineRef, location: usize, data: Vec<f32> },
@@ -37,7 +36,6 @@ enum FunctionCall {
 type Vis = crate::Visibility;
 
 enum ReturnValue {
-    FrameStarted(bool),
     AdapterInfo(wgpu::AdapterInfo),
     PipelineRef(PipelineRef),
     AttributeRef(AttributeRef),
@@ -88,9 +86,6 @@ impl RenderThread {
                     FunctionCall::RenderTo { targets, pipeline, clear_color, viewport, count } => {
                         let targets = targets.iter().map(|r| r.to_target(&textures)).collect::<Vec<_>>();
                         let _: () = renderer.render_to(&targets, &pipelines[pipeline.0], clear_color, viewport.as_ref(), count);
-                    },
-                    FunctionCall::StartFrame => {
-                        rv_sender.send(ReturnValue::FrameStarted(renderer.start_frame())).unwrap();
                     },
                     FunctionCall::FinishFrame => {
                         let _: () = renderer.finish_frame();
@@ -198,14 +193,6 @@ impl RenderThread {
     pub fn render_to(&self, targets: Vec<TargetRef>, pipeline: PipelineRef, clear_color: Option<crate::ClearColor>, viewport: Option<crate::Viewport>, count: (u32, u32)) {
         let function_call = FunctionCall::RenderTo { targets, pipeline, clear_color, viewport, count };
         self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
-    }
-
-    pub fn start_frame(&self) -> bool {
-        let function_call = FunctionCall::StartFrame;
-        self.fn_sender.as_ref().unwrap().send(function_call).unwrap();
-
-        let return_value = self.rv_receiver.as_ref().unwrap().recv().unwrap();
-        if let ReturnValue::FrameStarted(b) = return_value { b } else { unreachable!() }
     }
 
     pub fn finish_frame(&self) {

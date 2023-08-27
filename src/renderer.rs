@@ -80,7 +80,7 @@ impl Renderer {
     pub fn render_to(&self, targets: &[crate::Target], pipeline: &crate::Pipeline, clear_color: Option<crate::ClearColor>, viewport: Option<&crate::Viewport>, count: (u32, u32)) {
         let targets = targets.iter().filter(|t| {
             if let crate::Target::Screen = t {
-                self.start_frame()
+                self._start_frame()
             } else {
                 true
             }
@@ -92,7 +92,7 @@ impl Renderer {
         self.inner.borrow_mut().commands.push(cbuffer);
     }
 
-    pub fn start_frame(&self) -> bool {
+    fn _start_frame(&self) -> bool {
         if self.frame.is_some() { return true; }
 
         let mut inner = self.inner.borrow_mut();
