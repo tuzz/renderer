@@ -5,7 +5,7 @@ authors = ["Chris Patuzzo <chris@patuzzo.co.uk>"]
 edition = "2021"
 
 [dependencies]
-bincode = { version = "2.0.0-alpha.1", optional = true }
+bincode = { version = "2.0.0-rc.3", optional = true }
 bytemuck = "*"
 chrono = { version = "*", optional = true }
 crossbeam-channel = { version = "*", optional = true }

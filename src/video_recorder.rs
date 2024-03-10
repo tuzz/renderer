@@ -50,7 +50,7 @@ impl VideoRecorder {
             wgpu::LoadOp::Clear(inner.clear_color.as_ref().unwrap().inner)
         };
 
-        let store = true;
+        let store = wgpu::StoreOp::Store;
         let ops = wgpu::Operations { load, store };
 
         drop(inner);

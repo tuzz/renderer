@@ -1,17 +1,17 @@
 use crate::*;
 use std::{cell, ops};
-use std::sync::atomic;
+use std::sync::{atomic, Arc};
 use futures::executor;
 use winit::{dpi, window};
 
-pub struct Renderer {
-    pub inner: cell::RefCell<InnerR>,
+pub struct Renderer<'a> {
+    pub inner: cell::RefCell<InnerR<'a>>,
 }
 
-pub struct InnerR {
+pub struct InnerR<'a> {
     pub window_size: dpi::PhysicalSize<u32>,
     pub instance: wgpu::Instance,
-    pub surface: wgpu::Surface,
+    pub surface: wgpu::Surface<'a>,
     pub adapter: wgpu::Adapter,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
@@ -23,21 +23,20 @@ pub struct InnerR {
     pub flushes: atomic::AtomicU64,
 }
 
-impl Renderer {
-    pub fn new(window: &window::Window) -> Self {
-        let (instance, surface) = Self::create_surface(window);
-        Self::new_with_surface(window, instance, surface)
+impl<'a> Renderer<'a> {
+    pub fn new(window: Arc<window::Window>) -> Self {
+        let (instance, surface) = Self::create_surface(window.clone());
+        Self::new_with_surface(window.inner_size(), instance, surface)
     }
 
-    pub fn create_surface(window: &window::Window) -> (wgpu::Instance, wgpu::Surface) {
+    pub fn create_surface(window: Arc<window::Window>) -> (wgpu::Instance, wgpu::Surface<'a>) {
         let instance = get_instance();
-        let surface = unsafe { instance.create_surface(window).unwrap() }; // Must be called in main thread.
+        let surface = instance.create_surface(window).unwrap(); // Must be called in main thread.
 
         (instance, surface)
     }
 
-    pub fn new_with_surface(window: &window::Window, instance: wgpu::Instance, surface: wgpu::Surface) -> Self {
-        let window_size = window.inner_size();
+    pub fn new_with_surface(window_size: dpi::PhysicalSize<u32>, instance: wgpu::Instance, surface: wgpu::Surface<'a>) -> Self {
         let adapter = get_adapter(&instance, &surface);
         let (device, queue) = get_device(&adapter);
         let vsync = true;
@@ -314,6 +313,7 @@ fn configure_surface(surface: &wgpu::Surface, device: &wgpu::Device, window_size
         format: format.texture_format(),
         view_formats: vec![format.texture_format()],
         present_mode,
+        desired_maximum_frame_latency: 2,
         alpha_mode: wgpu::CompositeAlphaMode::Auto, // TODO: set an explicit alpha mode (check supported)
     });
 }
@@ -322,6 +322,8 @@ fn get_instance() -> wgpu::Instance {
     let descriptor = wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         dx12_shader_compiler: wgpu::Dx12Compiler::Fxc,
+        flags: wgpu::InstanceFlags::default(),
+        gles_minor_version: wgpu::Gles3MinorVersion::Automatic,
     };
 
     wgpu::Instance::new(descriptor)
@@ -342,8 +344,8 @@ fn get_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adap
 fn get_device(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
     let descriptor = wgpu::DeviceDescriptor {
         label: None,
-        features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
-        limits: wgpu::Limits::default(),
+        required_features: wgpu::Features::VERTEX_WRITABLE_STORAGE,
+        required_limits: wgpu::Limits::default(),
     };
 
     let future = adapter.request_device(&descriptor, None);
@@ -375,8 +377,8 @@ fn texture_index(index: usize, program: &crate::Program) -> usize {
     panic!("Tried to a get a texture but nothing is in that slot.");
 }
 
-impl ops::Deref for Renderer {
-    type Target = InnerR;
+impl<'a> ops::Deref for Renderer<'a> {
+    type Target = InnerR<'a>;
 
     fn deref(&self) -> &Self::Target {
         unsafe { &self.inner.try_borrow_unguarded().unwrap() }

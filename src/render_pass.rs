@@ -1,12 +1,12 @@
-pub struct RenderPass<'a> {
-    renderer: &'a crate::Renderer,
+pub struct RenderPass<'a, 'b> {
+    renderer: &'a crate::Renderer<'b>,
 }
 
 type Clear = Option<crate::ClearColor>;
 type View<'a> = Option<&'a crate::Viewport>;
 
-impl<'a> RenderPass<'a> {
-    pub fn new(renderer: &'a crate::Renderer) -> Self {
+impl<'a, 'b> RenderPass<'a, 'b> {
+    pub fn new(renderer: &'a crate::Renderer<'b>) -> Self {
         Self { renderer }
     }
 
@@ -70,7 +70,7 @@ impl<'a> RenderPass<'a> {
 
     fn color_attachment(&self, texture_view: &'a wgpu::TextureView, pipeline: &'a crate::Pipeline, clear: &Clear) -> wgpu::RenderPassColorAttachment<'a> {
         let load = match clear { Some(c) => wgpu::LoadOp::Clear(c.inner), _ => wgpu::LoadOp::Load };
-        let store = true;
+        let store = wgpu::StoreOp::Store;
         let ops = wgpu::Operations { load, store };
 
         let (view, resolve_target) = match pipeline.msaa_samples {
@@ -83,7 +83,7 @@ impl<'a> RenderPass<'a> {
 }
 
 fn render_pass_descriptor<'a>(color_attachments: &'a [Option<wgpu::RenderPassColorAttachment>]) -> wgpu::RenderPassDescriptor<'a, 'a> {
-    wgpu::RenderPassDescriptor { label: None, depth_stencil_attachment: None, color_attachments }
+    wgpu::RenderPassDescriptor { label: None, color_attachments, depth_stencil_attachment: None, timestamp_writes: None, occlusion_query_set: None }
 }
 
 fn create_command_encoder(device: &wgpu::Device) -> wgpu::CommandEncoder {

@@ -14,7 +14,7 @@ fn main() {
     renderer::Compiler::compile_shaders("examples/quads");
 
     // Create a winit window and a renderer for that window.
-    let event_loop = event_loop::EventLoop::new();
+    let event_loop = event_loop::EventLoop::new().unwrap();
     let window = Arc::new(window::WindowBuilder::new().build(&event_loop).unwrap());
     let mut renderer = RenderThread::new(window.clone());
 
@@ -125,48 +125,45 @@ fn main() {
     let mut x2 = (-0.5, 0.005);
     let mut y2 = (-0.1, 0.02);
 
-    event_loop.run(move |event, _, control_flow| {
+    event_loop.run(move |event, window_target| {
         match event {
-            event::Event::RedrawRequested(_) => {
-                // Update the x, y positions based on the x, y velocities.
-                // If the quad reaches the edge of the screen, reverse the direction.
-                x1.0 += x1.1; if x1.0 > 0.9 || x1.0 < -0.9 { x1.1 *= -1.; }
-                y1.0 += y1.1; if y1.0 > 0.9 || y1.0 < -0.9 { y1.1 *= -1.; }
-
-                x2.0 += x2.1; if x2.0 > 0.9 || x2.0 < -0.9 { x2.1 *= -1.; }
-                y2.0 += y2.1; if y2.0 > 0.9 || y2.0 < -0.9 { y2.1 *= -1.; }
-
-                // Ensure all of the RenderThread function calls for the last frame are done.
-                renderer.synchronize();
-
-                // Update the quad positions that _do_ change per render.
-                renderer.set_instanced(pipeline, I_OFFSET, vec![x1.0, y1.0, x2.0, y2.0]);
-
-                // Set the window's viewport to a square, surrounded by black borders.
-                let viewport = renderer.viewport(1., 1.); // e.g. (16., 9.)
-
-                // Render two instances, each comprised of four vertices.
-                renderer.render(pipeline, Some(clear_color), Some(viewport), (2, 4));
-                renderer.finish_frame();
-            },
-            event::Event::MainEventsCleared => {
+            event::Event::AboutToWait => {
                 window.request_redraw();
             },
             event::Event::WindowEvent { event, .. } => match event {
+                event::WindowEvent::RedrawRequested => {
+                    // Update the x, y positions based on the x, y velocities.
+                    // If the quad reaches the edge of the screen, reverse the direction.
+                    x1.0 += x1.1; if x1.0 > 0.9 || x1.0 < -0.9 { x1.1 *= -1.; }
+                    y1.0 += y1.1; if y1.0 > 0.9 || y1.0 < -0.9 { y1.1 *= -1.; }
+
+                    x2.0 += x2.1; if x2.0 > 0.9 || x2.0 < -0.9 { x2.1 *= -1.; }
+                    y2.0 += y2.1; if y2.0 > 0.9 || y2.0 < -0.9 { y2.1 *= -1.; }
+
+                    // Ensure all of the RenderThread function calls for the last frame are done.
+                    renderer.synchronize();
+
+                    // Update the quad positions that _do_ change per render.
+                    renderer.set_instanced(pipeline, I_OFFSET, vec![x1.0, y1.0, x2.0, y2.0]);
+
+                    // Set the window's viewport to a square, surrounded by black borders.
+                    let viewport = renderer.viewport(1., 1.); // e.g. (16., 9.)
+
+                    // Render two instances, each comprised of four vertices.
+                    renderer.render(pipeline, Some(clear_color), Some(viewport), (2, 4));
+                    renderer.finish_frame();
+                },
                 event::WindowEvent::Resized(size) => {
                     renderer.resize_swap_chain(&size);
                 },
-                event::WindowEvent::ScaleFactorChanged { new_inner_size: size, .. } => {
-                    renderer.resize_swap_chain(size);
-                }
                 event::WindowEvent::CloseRequested => {
-                    *control_flow = event_loop::ControlFlow::Exit;
+                    window_target.exit();
                 },
                 _ => {},
             },
             _ => {},
         }
-    });
+    }).unwrap();
 }
 
 fn load_image(bytes: &[u8]) -> (Vec<u8>, u32, u32) {
